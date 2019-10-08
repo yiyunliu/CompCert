@@ -17,7 +17,7 @@ Require Import String.
 Require Import Coqlib Errors.
 Require Import AST Linking Smallstep.
 (** Languages (syntax and semantics). *)
-Require Ctypes Csyntax Csem Cstrategy Cexec.
+Require Ctypes ChkCsyntax Csyntax Csem Cstrategy Cexec.
 Require Clight.
 Require Csharpminor.
 Require Cminor.
@@ -29,6 +29,7 @@ Require Mach.
 Require Asm.
 (** Translation passes. *)
 Require Initializers.
+Require ChkCgen.
 Require SimplExpr.
 Require SimplLocals.
 Require Cshmgen.
@@ -50,6 +51,7 @@ Require Debugvar.
 Require Stacking.
 Require Asmgen.
 (** Proofs of semantic preservation. *)
+Require ChkCgenproof.
 Require SimplExprproof.
 Require SimplLocalsproof.
 Require Cshmgenproof.
@@ -161,10 +163,15 @@ Definition transf_clight_program (p: Clight.program) : res Asm.program :=
   @@@ time "Cminor generation" Cminorgen.transl_program
   @@@ transf_cminor_program.
 
-Definition transf_c_program (p: Csyntax.program) : res Asm.program :=
+Definition transf_compc_program (p: Csyntax.program) : res Asm.program :=
   OK p
   @@@ time "Clight generation" SimplExpr.transl_program
   @@@ transf_clight_program.
+
+Definition transf_c_program (p: ChkCsyntax.program) : res Asm.program :=
+  OK p
+  @@@ time "CompCertC generation" ChkCgen.transl_program
+  @@@ transf_compc_program.
 
 (** Force [Initializers] and [Cexec] to be extracted as well. *)
 
@@ -229,7 +236,8 @@ Qed.
 Local Open Scope linking_scope.
 
 Definition CompCert's_passes :=
-      mkpass SimplExprproof.match_prog
+      mkpass ChkCgenproof.match_prog
+  ::: mkpass SimplExprproof.match_prog
   ::: mkpass SimplLocalsproof.match_prog
   ::: mkpass Cshmgenproof.match_prog
   ::: mkpass Cminorgenproof.match_prog
@@ -256,15 +264,15 @@ Definition CompCert's_passes :=
   between CompCert C sources and Asm code that characterize CompCert's
   compilation. *)
 
-Definition match_prog: Csyntax.program -> Asm.program -> Prop :=
+Definition match_prog: ChkCsyntax.program -> Asm.program -> Prop :=
   pass_match (compose_passes CompCert's_passes).
 
 (** The [transf_c_program] function, when successful, produces
   assembly code that is in the [match_prog] relation with the source C program. *)
 
-Theorem transf_c_program_match:
+Theorem transf_ccomp_program_match:
   forall p tp,
-  transf_c_program p = OK tp ->
+  transf_ccomp_program p = OK tp ->
   match_prog p tp.
 Proof.
   intros p tp T.
@@ -443,12 +451,12 @@ Qed.
   exists a backward simulation of the dynamic semantics of [p]
   by the dynamic semantics of [tp]. *)
 
-Theorem transf_c_program_correct:
+Theorem transf_ccomp_program_correct:
   forall p tp,
   transf_c_program p = OK tp ->
   backward_simulation (Csem.semantics p) (Asm.semantics tp).
 Proof.
-  intros. apply c_semantic_preservation. apply transf_c_program_match; auto.
+  intros. apply c_semantic_preservation. apply transf_ccomp_program_match; auto.
 Qed.
 
 (** Here is the separate compilation case.  Consider a nonempty list [c_units]
@@ -463,9 +471,9 @@ Qed.
   the dynamic semantics of [asm_program] by the dynamic semantics of [c_program].
 *)
 
-Theorem separate_transf_c_program_correct:
+Theorem separate_transf_ccomp_program_correct:
   forall c_units asm_units c_program,
-  nlist_forall2 (fun cu tcu => transf_c_program cu = OK tcu) c_units asm_units ->
+  nlist_forall2 (fun cu tcu => transf_ccomp_program cu = OK tcu) c_units asm_units ->
   link_list c_units = Some c_program ->
   exists asm_program,
       link_list asm_units = Some asm_program
@@ -473,7 +481,7 @@ Theorem separate_transf_c_program_correct:
 Proof.
   intros.
   assert (nlist_forall2 match_prog c_units asm_units).
-  { eapply nlist_forall2_imply. eauto. simpl; intros. apply transf_c_program_match; auto. }
+  { eapply nlist_forall2_imply. eauto. simpl; intros. apply transf_ccomp_program_match; auto. }
   assert (exists asm_program, link_list asm_units = Some asm_program /\ match_prog c_program asm_program).
   { eapply link_list_compose_passes; eauto. }
   destruct H2 as (asm_program & P & Q).
