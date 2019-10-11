@@ -17,7 +17,7 @@ Require Import Coqlib Maps Errors Integers.
 Require Import AST Linking.
 Require Import Values Memory Events Globalenvs Smallstep.
 Require Import Ctypes Cop ChkCsyntax Csyntax Csem Cstrategy Clight.
-Require Import ChkCgen ChkCgenproof.
+Require Import ChkCgen ChkCgenspec.
 
 (** ** Relational specification of the translation. *)
 

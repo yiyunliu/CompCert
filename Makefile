@@ -100,7 +100,7 @@ BACKEND=\
 
 CFRONTEND=Ctypes.v Cop.v ChkCsyntax.v Csyntax.v Csem.v Ctyping.v Cstrategy.v Cexec.v \
   Initializers.v Initializersproof.v \
-  ChkCgen.v ChkCgenproof.v SimplExpr.v SimplExprspec.v SimplExprproof.v \
+  ChkCgen.v ChkCgenspec.v ChkCgenproof.v SimplExpr.v SimplExprspec.v SimplExprproof.v \
   Clight.v ClightBigstep.v SimplLocals.v SimplLocalsproof.v \
   Cshmgen.v Cshmgenproof.v \
   Csharpminor.v Cminorgen.v Cminorgenproof.v
