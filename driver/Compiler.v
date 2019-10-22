@@ -163,15 +163,15 @@ Definition transf_clight_program (p: Clight.program) : res Asm.program :=
   @@@ time "Cminor generation" Cminorgen.transl_program
   @@@ transf_cminor_program.
 
-Definition transf_compc_program (p: Csyntax.program) : res Asm.program :=
+Definition transf_c_program (p: Csyntax.program) : res Asm.program :=
   OK p
   @@@ time "Clight generation" SimplExpr.transl_program
   @@@ transf_clight_program.
 
-Definition transf_c_program (p: ChkCsyntax.program) : res Asm.program :=
+Definition transf_chkc_program (p: ChkCsyntax.program) : res Asm.program :=
   OK p
   @@@ time "CompCertC generation" ChkCgen.transl_program
-  @@@ transf_compc_program.
+  @@@ transf_c_program.
 
 (** Force [Initializers] and [Cexec] to be extracted as well. *)
 
@@ -263,64 +263,69 @@ Definition CompCert's_passes :=
 (** Composing the [match_prog] relations above, we obtain the relation
   between CompCert C sources and Asm code that characterize CompCert's
   compilation. *)
-
+(*
 Definition match_prog: ChkCsyntax.program -> Asm.program -> Prop :=
   pass_match (compose_passes CompCert's_passes).
-
+ *)
+Definition match_prog: ChkCsyntax.program -> Asm.program -> Prop :=
+  pass_match (compose_passes CompCert's_passes).
 (** The [transf_c_program] function, when successful, produces
   assembly code that is in the [match_prog] relation with the source C program. *)
 
-Theorem transf_ccomp_program_match:
+Theorem transf_compc_program_match:
   forall p tp,
-  transf_ccomp_program p = OK tp ->
+  transf_chkc_program p = OK tp ->
   match_prog p tp.
 Proof.
   intros p tp T.
+  unfold transf_chkc_program, time in T. simpl in T.
+  destruct (ChkCgen.transl_program p) as [p1|e] eqn:P1; simpl in T; try discriminate.
   unfold transf_c_program, time in T. simpl in T.
-  destruct (SimplExpr.transl_program p) as [p1|e] eqn:P1; simpl in T; try discriminate.
+  destruct (SimplExpr.transl_program p1) as [p2|e] eqn:P2; simpl in T; try discriminate.
   unfold transf_clight_program, time in T. rewrite ! compose_print_identity in T. simpl in T.
-  destruct (SimplLocals.transf_program p1) as [p2|e] eqn:P2; simpl in T; try discriminate.
-  destruct (Cshmgen.transl_program p2) as [p3|e] eqn:P3; simpl in T; try discriminate.
-  destruct (Cminorgen.transl_program p3) as [p4|e] eqn:P4; simpl in T; try discriminate.
+  destruct (SimplLocals.transf_program p2) as [p3|e] eqn:P3; simpl in T; try discriminate.
+  destruct (Cshmgen.transl_program p3) as [p4|e] eqn:P4; simpl in T; try discriminate.
+  destruct (Cminorgen.transl_program p4) as [p5|e] eqn:P5; simpl in T; try discriminate.
   unfold transf_cminor_program, time in T. rewrite ! compose_print_identity in T. simpl in T.
-  destruct (Selection.sel_program p4) as [p5|e] eqn:P5; simpl in T; try discriminate.
-  destruct (RTLgen.transl_program p5) as [p6|e] eqn:P6; simpl in T; try discriminate.
+  destruct (Selection.sel_program p5) as [p6|e] eqn:P6; simpl in T; try discriminate.
+  destruct (RTLgen.transl_program p6) as [p7|e] eqn:P7; simpl in T; try discriminate.
   unfold transf_rtl_program, time in T. rewrite ! compose_print_identity in T. simpl in T.
-  set (p7 := total_if optim_tailcalls Tailcall.transf_program p6) in *.
-  destruct (Inlining.transf_program p7) as [p8|e] eqn:P8; simpl in T; try discriminate.
-  set (p9 := Renumber.transf_program p8) in *.
-  set (p10 := total_if optim_constprop Constprop.transf_program p9) in *.
-  set (p11 := total_if optim_constprop Renumber.transf_program p10) in *.
-  destruct (partial_if optim_CSE CSE.transf_program p11) as [p12|e] eqn:P12; simpl in T; try discriminate.
-  destruct (partial_if optim_redundancy Deadcode.transf_program p12) as [p13|e] eqn:P13; simpl in T; try discriminate.
-  destruct (Unusedglob.transform_program p13) as [p14|e] eqn:P14; simpl in T; try discriminate.
-  destruct (Allocation.transf_program p14) as [p15|e] eqn:P15; simpl in T; try discriminate.
-  set (p16 := Tunneling.tunnel_program p15) in *.
-  destruct (Linearize.transf_program p16) as [p17|e] eqn:P17; simpl in T; try discriminate.
-  set (p18 := CleanupLabels.transf_program p17) in *.
-  destruct (partial_if debug Debugvar.transf_program p18) as [p19|e] eqn:P19; simpl in T; try discriminate.
-  destruct (Stacking.transf_program p19) as [p20|e] eqn:P20; simpl in T; try discriminate.
+  set (p8 := total_if optim_tailcalls Tailcall.transf_program p7) in *.
+  destruct (Inlining.transf_program p8) as [p9|e] eqn:P9; simpl in T; try discriminate.
+  set (p10 := Renumber.transf_program p8) in *.
+  set (p11 := total_if optim_constprop Constprop.transf_program p10) in *.
+  set (p12 := total_if optim_constprop Renumber.transf_program p11) in *.
+  destruct (partial_if optim_CSE CSE.transf_program p12) as [p13|e] eqn:P13; simpl in T; try discriminate.
+  destruct (partial_if optim_redundancy Deadcode.transf_program p13) as [p14|e] eqn:P14; simpl in T; try discriminate.
+  destruct (Unusedglob.transform_program p14) as [p15|e] eqn:P15; simpl in T; try discriminate.
+  destruct (Allocation.transf_program p15) as [p16|e] eqn:P16; simpl in T; try discriminate.
+  set (p17 := Tunneling.tunnel_program p16) in *.
+  destruct (Linearize.transf_program p17) as [p18|e] eqn:P18; simpl in T; try discriminate.
+  set (p19 := CleanupLabels.transf_program p18) in *.
+  destruct (partial_if debug Debugvar.transf_program p19) as [p20|e] eqn:P20; simpl in T; try discriminate.
+  destruct (Stacking.transf_program p20) as [p21|e] eqn:P21; simpl in T; try discriminate.
   unfold match_prog; simpl.
-  exists p1; split. apply SimplExprproof.transf_program_match; auto.
-  exists p2; split. apply SimplLocalsproof.match_transf_program; auto.
-  exists p3; split. apply Cshmgenproof.transf_program_match; auto.
-  exists p4; split. apply Cminorgenproof.transf_program_match; auto.
-  exists p5; split. apply Selectionproof.transf_program_match; auto.
-  exists p6; split. apply RTLgenproof.transf_program_match; auto.
-  exists p7; split. apply total_if_match. apply Tailcallproof.transf_program_match.
-  exists p8; split. apply Inliningproof.transf_program_match; auto.
-  exists p9; split. apply Renumberproof.transf_program_match; auto.
-  exists p10; split. apply total_if_match. apply Constpropproof.transf_program_match.
-  exists p11; split. apply total_if_match. apply Renumberproof.transf_program_match.
-  exists p12; split. eapply partial_if_match; eauto. apply CSEproof.transf_program_match.
-  exists p13; split. eapply partial_if_match; eauto. apply Deadcodeproof.transf_program_match.
-  exists p14; split. apply Unusedglobproof.transf_program_match; auto.
-  exists p15; split. apply Allocproof.transf_program_match; auto.
-  exists p16; split. apply Tunnelingproof.transf_program_match.
-  exists p17; split. apply Linearizeproof.transf_program_match; auto.
-  exists p18; split. apply CleanupLabelsproof.transf_program_match; auto.
-  exists p19; split. eapply partial_if_match; eauto. apply Debugvarproof.transf_program_match.
-  exists p20; split. apply Stackingproof.transf_program_match; auto.
+  exists p1; split. apply ChkCgenproof.transf_program_match; auto.
+  exists p2; split. apply SimplExprproof.transf_program_match; auto.
+  exists p3; split. apply SimplLocalsproof.match_transf_program; auto.
+  exists p4; split. apply Cshmgenproof.transf_program_match; auto.
+  exists p5; split. apply Cminorgenproof.transf_program_match; auto.
+  exists p6; split. apply Selectionproof.transf_program_match; auto.
+  exists p7; split. apply RTLgenproof.transf_program_match; auto.
+  exists p8; split. apply total_if_match. apply Tailcallproof.transf_program_match.
+  exists p9; split. apply Inliningproof.transf_program_match; auto.
+  exists p10; split. apply Renumberproof.transf_program_match; auto.
+  exists p11; split. apply total_if_match. apply Constpropproof.transf_program_match.
+  exists p12; split. apply total_if_match. apply Renumberproof.transf_program_match.
+  exists p13; split. eapply partial_if_match; eauto. apply CSEproof.transf_program_match.
+  exists p14; split. eapply partial_if_match; eauto. apply Deadcodeproof.transf_program_match.
+  exists p15; split. apply Unusedglobproof.transf_program_match; auto.
+  exists p16; split. apply Allocproof.transf_program_match; auto.
+  exists p17; split. apply Tunnelingproof.transf_program_match.
+  exists p18; split. apply Linearizeproof.transf_program_match; auto.
+  exists p19; split. apply CleanupLabelsproof.transf_program_match; auto.
+  exists p20; split. eapply partial_if_match; eauto. apply Debugvarproof.transf_program_match.
+  exists p21; split. apply Stackingproof.transf_program_match; auto.
   exists tp; split. apply Asmgenproof.transf_program_match; auto.
   reflexivity.
 Qed.
