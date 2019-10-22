@@ -17,7 +17,7 @@ Require Import String.
 Require Import Coqlib Errors.
 Require Import AST Linking Smallstep.
 (** Languages (syntax and semantics). *)
-Require Ctypes ChkCsyntax Csyntax Csem Cstrategy Cexec.
+Require Ctypes ChkCsyntax Csyntax ChkCsem Csem ChkCstrategy Cstrategy Cexec.
 Require Clight.
 Require Csharpminor.
 Require Cminor.
@@ -292,7 +292,7 @@ Proof.
   unfold transf_rtl_program, time in T. rewrite ! compose_print_identity in T. simpl in T.
   set (p8 := total_if optim_tailcalls Tailcall.transf_program p7) in *.
   destruct (Inlining.transf_program p8) as [p9|e] eqn:P9; simpl in T; try discriminate.
-  set (p10 := Renumber.transf_program p8) in *.
+  set (p10 := Renumber.transf_program p9) in *.
   set (p11 := total_if optim_constprop Constprop.transf_program p10) in *.
   set (p12 := total_if optim_constprop Renumber.transf_program p11) in *.
   destruct (partial_if optim_CSE CSE.transf_program p12) as [p13|e] eqn:P13; simpl in T; try discriminate.
@@ -366,8 +366,8 @@ Qed.
 Theorem cstrategy_semantic_preservation:
   forall p tp,
   match_prog p tp ->
-  forward_simulation (Cstrategy.semantics p) (Asm.semantics tp)
-  /\ backward_simulation (atomic (Cstrategy.semantics p)) (Asm.semantics tp).
+  forward_simulation (ChkCstrategy.semantics p) (Asm.semantics tp)
+  /\ backward_simulation (atomic (ChkCstrategy.semantics p)) (Asm.semantics tp).
 Proof.
   intros p tp M. unfold match_prog, pass_match in M; simpl in M.
 Ltac DestructM :=
@@ -377,8 +377,10 @@ Ltac DestructM :=
       destruct H as (p & M & MM); clear H
   end.
   repeat DestructM. subst tp.
-  assert (F: forward_simulation (Cstrategy.semantics p) (Asm.semantics p21)).
+  assert (F: forward_simulation (ChkCstrategy.semantics p) (Asm.semantics p22)).
   {
+  eapply compose_forward_simulations.
+    eapply ChkCgenproof.transl_program_correct.
   eapply compose_forward_simulations.
     eapply SimplExprproof.transl_program_correct; eassumption.
   eapply compose_forward_simulations.
@@ -425,22 +427,22 @@ Ltac DestructM :=
   split. auto.
   apply forward_to_backward_simulation.
   apply factor_forward_simulation. auto. eapply sd_traces. eapply Asm.semantics_determinate.
-  apply atomic_receptive. apply Cstrategy.semantics_strongly_receptive.
+  apply atomic_receptive. apply ChkCstrategy.semantics_strongly_receptive.
   apply Asm.semantics_determinate.
 Qed.
 
 Theorem c_semantic_preservation:
   forall p tp,
   match_prog p tp ->
-  backward_simulation (Csem.semantics p) (Asm.semantics tp).
+  backward_simulation (ChkCsem.semantics p) (Asm.semantics tp).
 Proof.
   intros.
-  apply compose_backward_simulation with (atomic (Cstrategy.semantics p)).
+  apply compose_backward_simulation with (atomic (ChkCstrategy.semantics p)).
   eapply sd_traces; eapply Asm.semantics_determinate.
   apply factor_backward_simulation.
-  apply Cstrategy.strategy_simulation.
-  apply Csem.semantics_single_events.
-  eapply ssr_well_behaved; eapply Cstrategy.semantics_strongly_receptive.
+  apply ChkCstrategy.strategy_simulation.
+  apply ChkCsem.semantics_single_events.
+  eapply ssr_well_behaved; eapply ChkCstrategy.semantics_strongly_receptive.
   exact (proj2 (cstrategy_semantic_preservation _ _ H)).
 Qed.
 
@@ -458,10 +460,10 @@ Qed.
 
 Theorem transf_ccomp_program_correct:
   forall p tp,
-  transf_c_program p = OK tp ->
-  backward_simulation (Csem.semantics p) (Asm.semantics tp).
+  transf_chkc_program p = OK tp ->
+  backward_simulation (ChkCsem.semantics p) (Asm.semantics tp).
 Proof.
-  intros. apply c_semantic_preservation. apply transf_ccomp_program_match; auto.
+  intros. apply c_semantic_preservation. apply transf_compc_program_match; auto.
 Qed.
 
 (** Here is the separate compilation case.  Consider a nonempty list [c_units]
@@ -478,15 +480,15 @@ Qed.
 
 Theorem separate_transf_ccomp_program_correct:
   forall c_units asm_units c_program,
-  nlist_forall2 (fun cu tcu => transf_ccomp_program cu = OK tcu) c_units asm_units ->
+  nlist_forall2 (fun cu tcu => transf_chkc_program cu = OK tcu) c_units asm_units ->
   link_list c_units = Some c_program ->
   exists asm_program,
       link_list asm_units = Some asm_program
-   /\ backward_simulation (Csem.semantics c_program) (Asm.semantics asm_program).
+   /\ backward_simulation (ChkCsem.semantics c_program) (Asm.semantics asm_program).
 Proof.
   intros.
   assert (nlist_forall2 match_prog c_units asm_units).
-  { eapply nlist_forall2_imply. eauto. simpl; intros. apply transf_ccomp_program_match; auto. }
+  { eapply nlist_forall2_imply. eauto. simpl; intros. apply transf_compc_program_match; auto. }
   assert (exists asm_program, link_list asm_units = Some asm_program /\ match_prog c_program asm_program).
   { eapply link_list_compose_passes; eauto. }
   destruct H2 as (asm_program & P & Q).
