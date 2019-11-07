@@ -106,12 +106,11 @@ Definition measure (st: ChkCsem.state) : nat :=
   end.
 
 Inductive match_ctx : (ChkCsyntax.expr -> ChkCsyntax.expr) -> (expr -> expr) -> Prop :=
-| match_ctx_transl: forall e e' te te' C tC,
-    tr_expr e te ->
-    C e = e' ->
-    tC te = te' ->
-    tr_expr e' te' ->
-    match_ctx C tC.
+| match_ctx_transl: forall C tC,
+    (forall e te,
+      tr_expr e te ->
+      tr_expr (C e) (tC te)) ->
+      match_ctx C tC.
 
 Hint Constructors match_ctx.
 
@@ -272,6 +271,16 @@ Qed.
 
 Hint Resolve transl_call_cont.
 
+Lemma transl_fn_body:
+  forall f tf,
+    tr_function f tf ->
+    tr_stmt (ChkCsyntax.fn_body f) (Csyntax.fn_body tf).
+Proof.
+  destruct 1. assumption.
+Qed.
+
+Hint Resolve transl_fn_body.
+
 Lemma transl_is_call_cont:
   forall k tk,
     match_cont k tk ->
@@ -294,12 +303,13 @@ Admitted.
 Hint Resolve transl_lblstmts.
 
 Lemma transl_find_label:
-  forall lbl f tf k tk s' k' ts' tk',
+  forall lbl f tf k tk s' k',
     tr_function f tf ->
     match_cont k tk ->
     ChkCsem.find_label
       lbl (ChkCsyntax.fn_body f) (ChkCsem.call_cont k) = Some (s', k') ->
-    find_label lbl (fn_body tf) (call_cont tk) = Some (ts', tk').
+    exists ts' tk', find_label lbl (fn_body tf) (call_cont tk) = Some (ts', tk') /\
+               tr_stmt s' ts' /\ match_cont k' tk'.
 Proof.
 Admitted.
 
@@ -311,6 +321,46 @@ Lemma estep_simulation:
   exists S2', Cstrategy.step tge S1' t S2' /\ match_states S2 S2'.
 Proof.
 Admitted.
+
+Lemma transl_list_norepet:
+  forall f tf,
+    tr_function f tf ->
+    list_norepet
+      (ChkCsyntax.var_names (ChkCsyntax.fn_params f) ++
+                            ChkCsyntax.var_names (ChkCsyntax.fn_vars f)) ->
+    list_norepet (var_names (fn_params tf) ++ var_names (fn_vars tf)).
+Proof.
+  intros.
+  destruct H.
+  destruct f.
+  simpl in *.
+  rewrite H3.
+  rewrite H4.
+  apply H0.
+Qed.
+
+Hint Resolve transl_list_norepet.
+
+Lemma transl_variables:
+  forall f tf m1 e m2 vargs m3,
+    tr_function f tf ->
+    ChkCsem.alloc_variables ge ChkCsem.empty_env m1
+                            (ChkCsyntax.fn_params f ++ ChkCsyntax.fn_vars f) e m2 ->
+    ChkCsem.bind_parameters ge e m2 (ChkCsyntax.fn_params f) vargs m3 ->
+    exists trm2,
+      alloc_variables tge empty_env m1 (fn_params tf ++ fn_vars tf) e trm2 /\
+      bind_parameters tge e trm2 (fn_params tf) vargs m3.
+Proof.
+Admitted.
+
+Lemma transl_external:
+  forall ef vargs m t vres m',
+    external_call ef ge vargs m t vres m' ->
+    external_call ef tge vargs m t vres m'.
+Proof.
+Admitted.
+
+Hint Resolve transl_external.
 
 Lemma sstep_simulation:
   forall S1 t S2, ChkCsem.sstep ge S1 t S2 ->
@@ -352,18 +402,21 @@ Proof.
   - inv H; inv H7; inv H8; econstructor; split; try right; eauto.
   - inv H6. inv H7. econstructor. split; try right; eauto.
   - inv H6. econstructor. split; try right; eauto.
-  - inv H7. econstructor. split; try right; eauto. admit.
-  - inv H7. econstructor. split; try right; eauto. econstructor.
-    admit.
-    admit.
-    admit.
-    constructor.
-    assumption.
-    inv H3.
-    assumption.
-    assumption.
-  - admit.
-  - inv H3. econstructor. split; try right; eauto. admit.
+  - apply transl_find_label with (tf := tf) (tk := tk) in H.
+    inv H. inv H0. inv H. inv H1. inv H7.
+    econstructor; split; try right; eauto. assumption. assumption.
+  - inv H7. econstructor. split; try right; eauto.
+    pose proof transl_variables.
+    specialize (H2 f tf m e m1 vargs m2 H3 H0 H1).
+    inv H2. inv H4.
+    econstructor. eauto.
+    apply H2.
+    apply H5.
+  - inv H5. econstructor. split; try right; eauto.
+  - inv H3. econstructor. split; try right; eauto.
+    inv H7.
+    econstructor. assumption.
+    apply H. econstructor. assumption.
 Qed.
 
 Lemma simulation:
