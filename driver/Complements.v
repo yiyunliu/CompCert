@@ -15,7 +15,7 @@
 Require Import Classical.
 Require Import Coqlib Errors.
 Require Import AST Linking Events Smallstep Behaviors.
-Require Import Csyntax Csem Cstrategy Asm.
+Require Import Csyntax Csem Cstrategy Asm ChkCsem ChkCstrategy.
 Require Import Compiler.
 
 (** * Preservation of whole-program behaviors *)
@@ -30,12 +30,12 @@ Require Import Compiler.
 
 Theorem transf_c_program_preservation:
   forall p tp beh,
-  transf_c_program p = OK tp ->
+  transf_chkc_program p = OK tp ->
   program_behaves (Asm.semantics tp) beh ->
-  exists beh', program_behaves (Csem.semantics p) beh' /\ behavior_improves beh' beh.
+  exists beh', program_behaves (ChkCsem.semantics p) beh' /\ behavior_improves beh' beh.
 Proof.
   intros. eapply backward_simulation_behavior_improves; eauto.
-  apply transf_c_program_correct; auto.
+  apply transf_ccomp_program_correct; auto.
 Qed.
 
 (** As a corollary, if the source C code cannot go wrong, i.e. is free of
@@ -44,12 +44,12 @@ Qed.
 
 Theorem transf_c_program_is_refinement:
   forall p tp,
-  transf_c_program p = OK tp ->
-  (forall beh, program_behaves (Csem.semantics p) beh -> not_wrong beh) ->
-  (forall beh, program_behaves (Asm.semantics tp) beh -> program_behaves (Csem.semantics p) beh).
+  transf_chkc_program p = OK tp ->
+  (forall beh, program_behaves (ChkCsem.semantics p) beh -> not_wrong beh) ->
+  (forall beh, program_behaves (Asm.semantics tp) beh -> program_behaves (ChkCsem.semantics p) beh).
 Proof.
   intros. eapply backward_simulation_same_safe_behavior; eauto.
-  apply transf_c_program_correct; auto.
+  apply transf_ccomp_program_correct; auto.
 Qed.
 
 (** If we consider the C evaluation strategy implemented by the compiler,
@@ -57,22 +57,22 @@ Qed.
 
 Theorem transf_cstrategy_program_preservation:
   forall p tp,
-  transf_c_program p = OK tp ->
-  (forall beh, program_behaves (Cstrategy.semantics p) beh ->
+  transf_chkc_program p = OK tp ->
+  (forall beh, program_behaves (ChkCstrategy.semantics p) beh ->
      exists beh', program_behaves (Asm.semantics tp) beh' /\ behavior_improves beh beh')
 /\(forall beh, program_behaves (Asm.semantics tp) beh ->
-     exists beh', program_behaves (Cstrategy.semantics p) beh' /\ behavior_improves beh' beh)
+     exists beh', program_behaves (ChkCstrategy.semantics p) beh' /\ behavior_improves beh' beh)
 /\(forall beh, not_wrong beh ->
-     program_behaves (Cstrategy.semantics p) beh -> program_behaves (Asm.semantics tp) beh)
+     program_behaves (ChkCstrategy.semantics p) beh -> program_behaves (Asm.semantics tp) beh)
 /\(forall beh,
-     (forall beh', program_behaves (Cstrategy.semantics p) beh' -> not_wrong beh') ->
+     (forall beh', program_behaves (ChkCstrategy.semantics p) beh' -> not_wrong beh') ->
      program_behaves (Asm.semantics tp) beh ->
-     program_behaves (Cstrategy.semantics p) beh).
+     program_behaves (ChkCstrategy.semantics p) beh).
 Proof.
-  assert (WBT: forall p, well_behaved_traces (Cstrategy.semantics p)).
-    intros. eapply ssr_well_behaved. apply Cstrategy.semantics_strongly_receptive.
+  assert (WBT: forall p, well_behaved_traces (semantics p)).
+    intros. eapply ssr_well_behaved. apply ChkCstrategy.semantics_strongly_receptive.
   intros.
-  assert (MATCH: match_prog p tp) by (apply transf_c_program_match; auto).
+  assert (MATCH: match_prog p tp) by (apply transf_compc_program_match; auto).
   intuition auto.
   eapply forward_simulation_behavior_improves; eauto.
     apply (proj1 (cstrategy_semantic_preservation _ _ MATCH)).
@@ -93,20 +93,20 @@ Qed.
 
 Theorem bigstep_cstrategy_preservation:
   forall p tp,
-  transf_c_program p = OK tp ->
+  transf_chkc_program p = OK tp ->
   (forall t r,
-     Cstrategy.bigstep_program_terminates p t r ->
+     ChkCstrategy.bigstep_program_terminates p t r ->
      program_behaves (Asm.semantics tp) (Terminates t r))
 /\(forall T,
-     Cstrategy.bigstep_program_diverges p T ->
+     ChkCstrategy.bigstep_program_diverges p T ->
        program_behaves (Asm.semantics tp) (Reacts T)
     \/ exists t, program_behaves (Asm.semantics tp) (Diverges t) /\ traceinf_prefix t T).
 Proof.
   intuition.
   apply transf_cstrategy_program_preservation with p; auto. red; auto.
-  apply behavior_bigstep_terminates with (Cstrategy.bigstep_semantics p); auto.
-  apply Cstrategy.bigstep_semantics_sound.
-  exploit (behavior_bigstep_diverges (Cstrategy.bigstep_semantics_sound p)). eassumption.
+  apply behavior_bigstep_terminates with (ChkCstrategy.bigstep_semantics p); auto.
+  apply ChkCstrategy.bigstep_semantics_sound.
+  exploit (behavior_bigstep_diverges (ChkCstrategy.bigstep_semantics_sound p)). eassumption.
   intros [A | [t [A B]]].
   left. apply transf_cstrategy_program_preservation with p; auto. red; auto.
   right; exists t; split; auto. apply transf_cstrategy_program_preservation with p; auto. red; auto.
@@ -132,8 +132,8 @@ Definition specification := program_behavior -> Prop.
 (** A program satisfies a specification if all its observable behaviors
   are in the specification. *)
 
-Definition c_program_satisfies_spec (p: Csyntax.program) (spec: specification): Prop :=
-  forall beh,  program_behaves (Csem.semantics p) beh -> spec beh.
+Definition c_program_satisfies_spec (p: ChkCsyntax.program) (spec: specification): Prop :=
+  forall beh,  program_behaves (ChkCsem.semantics p) beh -> spec beh.
 Definition asm_program_satisfies_spec (p: Asm.program) (spec: specification): Prop :=
   forall beh,  program_behaves (Asm.semantics p) beh -> spec beh.
   
@@ -158,7 +158,7 @@ Definition safety_enforcing_specification (spec: specification): Prop :=
 
 Theorem transf_c_program_preserves_spec:
   forall p tp spec,
-  transf_c_program p = OK tp ->
+  transf_chkc_program p = OK tp ->
   safety_enforcing_specification spec ->
   c_program_satisfies_spec p spec ->
   asm_program_satisfies_spec tp spec.
@@ -180,14 +180,14 @@ Qed.
   the expected trace at the beginning of its execution.  This is a typical
   liveness property, and it is preserved by compilation. *)
 
-Definition c_program_has_initial_trace (p: Csyntax.program) (t: trace): Prop :=
-  forall beh, program_behaves (Csem.semantics p) beh -> behavior_prefix t beh.
+Definition c_program_has_initial_trace (p: ChkCsyntax.program) (t: trace): Prop :=
+  forall beh, program_behaves (ChkCsem.semantics p) beh -> behavior_prefix t beh.
 Definition asm_program_has_initial_trace (p: Asm.program) (t: trace): Prop :=
   forall beh, program_behaves (Asm.semantics p) beh -> behavior_prefix t beh.
 
 Theorem transf_c_program_preserves_initial_trace:
   forall p tp t,
-  transf_c_program p = OK tp ->
+  transf_chkc_program p = OK tp ->
   c_program_has_initial_trace p t ->
   asm_program_has_initial_trace tp t.
 Proof.
@@ -209,16 +209,16 @@ Qed.
 Section SEPARATE_COMPILATION.
 
 (** The source: a list of C compilation units *)
-Variable c_units: nlist Csyntax.program.
+Variable c_units: nlist ChkCsyntax.program.
 
 (** The compiled code: a list of Asm compilation units, obtained by separate compilation *)
 Variable asm_units: nlist Asm.program.
 Hypothesis separate_compilation_succeeds: 
-  nlist_forall2 (fun cu tcu => transf_c_program cu = OK tcu) c_units asm_units.
+  nlist_forall2 (fun cu tcu => transf_chkc_program cu = OK tcu) c_units asm_units.
 
 (** We assume that the source C compilation units can be linked together
     to obtain a monolithic C program [c_program]. *)
-Variable c_program: Csyntax.program.
+Variable c_program: ChkCsyntax.program.
 Hypothesis source_linking: link_list c_units = Some c_program.
 
 (** Then, linking the Asm units obtained by separate compilation succeeds. *)
@@ -228,7 +228,7 @@ Proof.
   destruct (link_list asm_units) eqn:E. 
 - exists p; auto.
 - exfalso. 
-  exploit separate_transf_c_program_correct; eauto. intros (a & P & Q).
+  exploit separate_transf_ccomp_program_correct; eauto. intros (a & P & Q).
   congruence.
 Qed.
 
@@ -244,9 +244,9 @@ Let compiled_linking: link_list asm_units = Some asm_program := proj2_sig compil
 Theorem separate_transf_c_program_preservation:
   forall beh,
   program_behaves (Asm.semantics asm_program) beh ->
-  exists beh', program_behaves (Csem.semantics c_program) beh' /\ behavior_improves beh' beh.
+  exists beh', program_behaves (ChkCsem.semantics c_program) beh' /\ behavior_improves beh' beh.
 Proof.
-  intros. exploit separate_transf_c_program_correct; eauto. intros (a & P & Q).
+  intros. exploit separate_transf_ccomp_program_correct; eauto. intros (a & P & Q).
   assert (a = asm_program) by congruence. subst a. 
   eapply backward_simulation_behavior_improves; eauto.
 Qed.
@@ -255,8 +255,8 @@ Qed.
   the behavior of [asm_program] is one of the possible behaviors of [c_program]. *)
 
 Theorem separate_transf_c_program_is_refinement:
-  (forall beh, program_behaves (Csem.semantics c_program) beh -> not_wrong beh) ->
-  (forall beh, program_behaves (Asm.semantics asm_program) beh -> program_behaves (Csem.semantics c_program) beh).
+  (forall beh, program_behaves (ChkCsem.semantics c_program) beh -> not_wrong beh) ->
+  (forall beh, program_behaves (Asm.semantics asm_program) beh -> program_behaves (ChkCsem.semantics c_program) beh).
 Proof.
   intros. exploit separate_transf_c_program_preservation; eauto. intros (beh' & P & Q).
   assert (not_wrong beh') by auto.

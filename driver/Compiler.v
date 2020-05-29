@@ -380,7 +380,7 @@ Ltac DestructM :=
   assert (F: forward_simulation (ChkCstrategy.semantics p) (Asm.semantics p22)).
   {
   eapply compose_forward_simulations.
-    eapply ChkCgenproof.transl_program_correct.
+    eapply ChkCgenproof.transl_program_correct; eassumption.
   eapply compose_forward_simulations.
     eapply SimplExprproof.transl_program_correct; eassumption.
   eapply compose_forward_simulations.
