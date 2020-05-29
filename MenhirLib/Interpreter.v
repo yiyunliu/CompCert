@@ -12,6 +12,7 @@
 (****************************************************************************)
 
 From Coq Require Import List Syntax.
+Import ListNotations.
 From Coq.ssr Require Import ssreflect.
 Require Automaton.
 Require Import Alphabet Grammar Validator_safe.
