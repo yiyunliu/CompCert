@@ -17,7 +17,7 @@
 
 Require Import Coqlib Maps Integers Floats Errors.
 Require Import AST Linking Values.
-Require Import Ctypes Cop.
+Require Import ChkCtypes Cop.
 
 (** ** Expressions *)
 
@@ -105,7 +105,7 @@ Definition Epreincr (id: incr_or_decr) (l: expr) (ty: type) :=
   It is expressed as an invocation of a builtin function. *)
 Definition Eselection (r1 r2 r3: expr) (ty: type) :=
   let t := typ_of_type ty in
-  let sg := mksignature (AST.Tint :: t :: t :: nil) (Tret t) cc_default in
+  let sg := mksignature (AST.Tint :: t :: t :: nil) t cc_default in
   Ebuiltin (EF_builtin "__builtin_sel"%string sg)
            (Tcons type_bool (Tcons ty (Tcons ty Tnil)))
            (Econs r1 (Econs r2 (Econs r3 Enil)))
@@ -197,7 +197,7 @@ Definition var_names (vars: list(ident * type)) : list ident :=
 (** Functions can either be defined ([Internal]) or declared as
   external functions ([External]). *)
 
-Definition fundef := Ctypes.fundef function.
+Definition fundef := ChkCtypes.fundef function.
 
 (** The type of a function definition. *)
 
@@ -221,4 +221,4 @@ Definition type_of_fundef (f: fundef) : type :=
 - the corresponding composite environment
 - a proof that this environment is consistent with the definitions. *)
 
-Definition program := Ctypes.program function.
+Definition program := ChkCtypes.program function.

@@ -74,6 +74,7 @@ Inductive type : Type :=
   | Tfunction: typelist -> type -> calling_convention -> type    (**r function types *)
   | Tstruct: ident -> attr -> type                 (**r struct types *)
   | Tunion: ident -> attr -> type                  (**r union types *)
+  | Tchkcptr: type -> attr -> type                 (**r checked pointer types ([*ty]) *)
 with typelist : Type :=
   | Tnil: typelist
   | Tcons: type -> typelist -> typelist.
@@ -111,6 +112,7 @@ Definition attr_of_type (ty: type) :=
   | Tfunction args res cc => noattr
   | Tstruct id a => a
   | Tunion id a => a
+  | Tchkcptr elt a => a
   end.
 
 (** Change the top-level attributes of a type *)
@@ -126,6 +128,7 @@ Definition change_attributes (f: attr -> attr) (ty: type) : type :=
   | Tfunction args res cc => ty
   | Tstruct id a => Tstruct id (f a)
   | Tunion id a => Tunion id (f a)
+  | Tchkcptr elt a => Tchkcptr elt (f a)
   end.
 
 (** Erase the top-level attributes of a type *)
@@ -241,6 +244,7 @@ Fixpoint complete_type (env: composite_env) (t: type) : bool :=
   | Tfunction _ _ _ => false
   | Tstruct id _ | Tunion id _ =>
       match env!id with Some co => true | None => false end
+  | Tchkcptr _ _ => true
   end.
 
 Definition complete_or_function_type (env: composite_env) (t: type) : bool :=
@@ -281,6 +285,7 @@ Fixpoint alignof (env: composite_env) (t: type) : Z :=
       | Tfunction _ _ _ => 1
       | Tstruct id _ | Tunion id _ =>
           match env!id with Some co => co_alignof co | None => 1 end
+      | Tchkcptr _ _ => if Archi.ptr64 then 8 else 4
     end).
 
 Remark align_attr_two_p:
@@ -312,6 +317,7 @@ Proof.
   exists 0%nat; auto.
   destruct (env!i). apply co_alignof_two_p. exists 0%nat; auto.
   destruct (env!i). apply co_alignof_two_p. exists 0%nat; auto.
+  exists (if Archi.ptr64 then 3%nat else 2%nat); destruct Archi.ptr64; auto.
 Qed.
 
 Lemma alignof_pos:
@@ -344,6 +350,7 @@ Fixpoint sizeof (env: composite_env) (t: type) : Z :=
   | Tfunction _ _ _ => 1
   | Tstruct id _ | Tunion id _ =>
       match env!id with Some co => co_sizeof co | None => 0 end
+  | Tchkcptr _ _ => if Archi.ptr64 then 8 else 4
   end.
 
 Lemma sizeof_pos:
@@ -356,6 +363,7 @@ Proof.
   change 0 with (0 * Z.max 0 z) at 2. apply Zmult_ge_compat_r. auto. xomega.
   destruct (env!i). apply co_sizeof_pos. omega.
   destruct (env!i). apply co_sizeof_pos. omega.
+  destruct Archi.ptr64; omega.
 Qed.
 
 (** The size of a type is an integral multiple of its alignment,
@@ -382,6 +390,7 @@ Proof.
 - apply Z.divide_refl.
 - destruct (env!i). apply co_sizeof_alignof. apply Z.divide_0_r.
 - destruct (env!i). apply co_sizeof_alignof. apply Z.divide_0_r.
+- apply Z.divide_refl.
 Qed.
 
 (** ** Size and alignment for composite definitions *)
@@ -586,6 +595,7 @@ Definition access_mode (ty: type) : mode :=
   | Tfunction _ _ _ => By_reference
   | Tstruct _ _ => By_copy
   | Tunion _ _ => By_copy
+  | Tchkcptr _ _ => By_value Mptr
 end.
 
 (** For the purposes of the semantics and the compiler, a type denotes
@@ -622,6 +632,7 @@ Fixpoint alignof_blockcopy (env: composite_env) (t: type) : Z :=
       | Some co => Z.min 8 (co_alignof co)
       | None => 1
       end
+  | Tchkcptr _ _ => if Archi.ptr64 then 8 else 4
   end.
 
 Lemma alignof_blockcopy_1248:
@@ -648,6 +659,7 @@ Proof.
   auto.
   destruct (env!i); auto.
   destruct (env!i); auto.
+  destruct Archi.ptr64; auto.
 Qed.
 
 Lemma alignof_blockcopy_pos:
@@ -683,6 +695,7 @@ Proof.
   apply Z.divide_refl.
   destruct (env!i). apply X. apply Z.divide_0_r.
   destruct (env!i). apply X. apply Z.divide_0_r.
+  apply Z.divide_refl.
 Qed.
 
 (** Type ranks *)
@@ -722,6 +735,7 @@ Fixpoint type_of_params (params: list (ident * type)) : typelist :=
 
 (** Translating C types to Cminor types and function signatures. *)
 
+(* YL: why do we need to translate down to CMinor? *)
 Definition typ_of_type (t: type) : AST.typ :=
   match t with
   | Tvoid => AST.Tint
@@ -729,8 +743,9 @@ Definition typ_of_type (t: type) : AST.typ :=
   | Tlong _ _ => AST.Tlong
   | Tfloat F32 _ => AST.Tsingle
   | Tfloat F64 _ => AST.Tfloat
-  | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _ | Tstruct _ _ | Tunion _ _ => AST.Tptr
+  | Tpointer _ _ | Tarray _ _ _ | Tfunction _ _ _ | Tstruct _ _ | Tunion _ _ | Tchkcptr _ _ => AST.Tptr
   end.
+
 
 Definition rettype_of_type (t: type) : AST.rettype :=
   match t with
@@ -746,6 +761,7 @@ Definition rettype_of_type (t: type) : AST.rettype :=
   | Tfloat F64 _ => AST.Tfloat
   | Tpointer _ _ => AST.Tptr
   | Tarray _ _ _ | Tfunction _ _ _ | Tstruct _ _ | Tunion _ _ => AST.Tvoid
+  | Tchkcptr _ _ => AST.Tptr
   end.
 
 Fixpoint typlist_of_typelist (tl: typelist) : list AST.typ :=

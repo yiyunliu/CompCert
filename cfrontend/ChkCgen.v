@@ -10,7 +10,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(** Translation from Compcert C to Clight.
+(** Translation from Checked C to Compcert C.
     Side effects are pulled out of Compcert C expressions. *)
 
 Require Import Coqlib.
@@ -21,6 +21,7 @@ Require Import Values.
 Require Import Memory.
 Require Import AST.
 Require Import Ctypes.
+Require Import ChkCtypes.
 Require Import Cop.
 Require Import ChkCsyntax.
 Require Import Csyntax.
@@ -78,78 +79,88 @@ Parameter first_unused_ident: unit -> ident.
 Definition initial_generator (x: unit) : generator :=
   mkgenerator (first_unused_ident x) nil.
 
+Fixpoint transl_type (e: ChkCtypes.type) : Ctypes.type.
+Admitted.
+
+Fixpoint transl_typelist (e: ChkCtypes.typelist) : Ctypes.typelist.
+Admitted.
+
 Fixpoint transl_expr (e: ChkCsyntax.expr) : mon expr :=
   match e with
   | ChkCsyntax.Eval v ty =>
-    ret (Eval v ty)
+    ret (Eval v (transl_type ty))
   | ChkCsyntax.Evar x ty =>
-    ret (Evar x ty)
+    ret (Evar x (transl_type ty))
   | ChkCsyntax.Efield l f ty =>
     do tl <- transl_expr l;
-    ret (Efield tl f ty)
+    ret (Efield tl f (transl_type ty))
   | ChkCsyntax.Evalof l ty =>
     do tl <- transl_expr l;
-    ret (Evalof tl ty)
+    ret (Evalof tl (transl_type ty))
+  (* | ChkCsyntax.Ederef r (Tchkcptr _ _ as ty) => *)
+  (*   do tr <- transl_expr r; *)
+    
+  (*   ret (Ederef tr (transl_type ty)) *)
   | ChkCsyntax.Ederef r ty =>
     do tr <- transl_expr r;
-    ret (Ederef tr ty)
+    ret (Ederef tr (transl_type ty))
   | ChkCsyntax.Eaddrof l ty =>
     do tl <- transl_expr l;
-    ret (Eaddrof tl ty)
+    ret (Eaddrof tl (transl_type ty))
   | ChkCsyntax.Eunop op r ty =>
     do tr <- transl_expr r;
-    ret (Eunop op tr ty)
+    ret (Eunop op tr (transl_type ty))
   | ChkCsyntax.Ebinop op r1 r2 ty =>
     do tr1 <- transl_expr r1;
     do tr2 <- transl_expr r2;
-    ret (Ebinop op tr1 tr2 ty)
+    ret (Ebinop op tr1 tr2 (transl_type ty))
   | ChkCsyntax.Ecast r ty =>
     do tr <- transl_expr r;
-    ret (Ecast tr ty)
+    ret (Ecast tr (transl_type ty))
   | ChkCsyntax.Eseqand r1 r2 ty =>
     do tr1 <- transl_expr r1;
     do tr2 <- transl_expr r2;
-    ret (Eseqand tr1 tr2 ty)
+    ret (Eseqand tr1 tr2 (transl_type ty))
   | ChkCsyntax.Eseqor r1 r2 ty =>
     do tr1 <- transl_expr r1;
     do tr2 <- transl_expr r2;
-    ret (Eseqor tr1 tr2 ty)
+    ret (Eseqor tr1 tr2 (transl_type ty))
   | ChkCsyntax.Econdition r1 r2 r3 ty =>
     do tr1 <- transl_expr r1;
     do tr2 <- transl_expr r2;
     do tr3 <- transl_expr r3;
-    ret (Econdition tr1 tr2 tr3 ty)
+    ret (Econdition tr1 tr2 tr3 (transl_type ty))
   | ChkCsyntax.Esizeof ty' ty =>
-    ret (Esizeof ty' ty)
+    ret (Esizeof (transl_type ty') (transl_type ty))
   | ChkCsyntax.Ealignof ty' ty =>
-    ret (Ealignof ty' ty)
+    ret (Ealignof (transl_type ty') (transl_type ty))
   | ChkCsyntax.Eassign l r ty =>
     do tl <- transl_expr l;
     do tr <- transl_expr r;
-    ret (Eassign tl tr ty)
+    ret (Eassign tl tr (transl_type ty))
   | ChkCsyntax.Eassignop op l r tyres ty =>
     do tl <- transl_expr l;
     do tr <- transl_expr r;
-    ret (Eassignop op tl tr tyres ty)
+    ret (Eassignop op tl tr (transl_type tyres) (transl_type ty))
   | ChkCsyntax.Epostincr id l ty =>
     do tl <- transl_expr l;
-    ret (Epostincr id tl ty)
+    ret (Epostincr id tl (transl_type ty))
   | ChkCsyntax.Ecomma r1 r2 ty =>
     do tr1 <- transl_expr r1;
     do tr2 <- transl_expr r2;
-    ret (Ecomma tr1 tr2 ty)
+    ret (Ecomma tr1 tr2 (transl_type ty))
   | ChkCsyntax.Ecall r1 rargs ty =>
     do tr1    <- transl_expr r1;
     do trargs <- transl_exprlist rargs;
-    ret (Ecall tr1 trargs ty)
+    ret (Ecall tr1 trargs (transl_type ty))
   | ChkCsyntax.Ebuiltin ef tyargs rargs ty =>
     do trargs <- transl_exprlist rargs;
-    ret (Ebuiltin ef tyargs trargs ty)
+    ret (Ebuiltin ef (transl_typelist tyargs) trargs (transl_type ty))
   | ChkCsyntax.Eloc b ofs ty =>
-    ret (Eloc b ofs ty)
+    ret (Eloc b ofs (transl_type ty))
   | ChkCsyntax.Eparen r tycast ty =>
     do tr <- transl_expr r;
-    ret (Eparen tr tycast ty)
+    ret (Eparen tr (transl_type tycast) (transl_type ty))
   end
 
 with transl_exprlist (rl : ChkCsyntax.exprlist) : mon exprlist :=
