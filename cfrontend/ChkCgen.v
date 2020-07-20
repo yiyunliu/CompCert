@@ -103,6 +103,7 @@ Fixpoint transl_expr (e: ChkCsyntax.expr) : mon expr :=
   (*   ret (Ederef tr (transl_type ty)) *)
   | ChkCsyntax.Ederef r ty =>
     do tr <- transl_expr r;
+  (* TODO: if then else here *)
     ret (Ederef tr (transl_type ty))
   | ChkCsyntax.Eaddrof l ty =>
     do tl <- transl_expr l;
