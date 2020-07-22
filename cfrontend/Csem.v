@@ -621,8 +621,7 @@ with find_label_ls (lbl: label) (sl: labeled_statements) (k: cont)
 
 This makes it easy to express different reduction strategies for expressions:
 the second group of rules can be reused as is. *)
-Print external_call.
-Print external_function.
+
 Inductive estep: state -> trace -> state -> Prop :=
 
   | step_lred: forall C f a k e m a' m',

@@ -460,6 +460,20 @@ Qed.
   compiler built-in functions.  We define a type for external functions
   and associated operations. *)
 
+
+
+Inductive chkc_exception : Type  :=
+  | CE_OOB
+  | CE_NULLPTR.
+
+Definition chkc_exception_eq: forall (s1 s2: chkc_exception), {s1=s2} + {s1<>s2}.
+Proof.
+  decide equality.
+Defined.
+Global Opaque chkc_exception_eq.
+
+
+
 Inductive external_function : Type :=
   | EF_external (name: string) (sg: signature)
      (** A system call or library function.  Produces an event
@@ -504,11 +518,12 @@ Inductive external_function : Type :=
          used with caution, as it can invalidate the semantic
          preservation theorem.  Generated only if [-finline-asm] is
          given. *)
-  | EF_debug (kind: positive) (text: ident) (targs: list typ).
+  | EF_debug (kind: positive) (text: ident) (targs: list typ)
      (** Transport debugging information from the front-end to the generated
          assembly.  Takes zero, one or several arguments like [EF_annot].
          Unlike [EF_annot], produces no observable event. *)
-
+  | EF_chkc (exception_type : chkc_exception).
+      
 (** The type signature of an external function. *)
 
 Definition ef_sig (ef: external_function): signature :=
@@ -525,6 +540,7 @@ Definition ef_sig (ef: external_function): signature :=
   | EF_annot_val kind text targ => mksignature (targ :: nil) targ cc_default
   | EF_inline_asm text sg clob => sg
   | EF_debug kind text targs => mksignature targs Tvoid cc_default
+  | EF_chkc _ => mksignature nil Tvoid cc_default
   end.
 
 (** Whether an external function should be inlined by the compiler. *)
@@ -543,6 +559,8 @@ Definition ef_inline (ef: external_function) : bool :=
   | EF_annot_val kind Text rg => true
   | EF_inline_asm text sg clob => true
   | EF_debug kind text targs => true
+  (* YL: not sure about this *)
+  | EF_chkc _ => true
   end.
 
 (** Whether an external function must reload its arguments. *)
@@ -558,7 +576,7 @@ Definition ef_reloads (ef: external_function) : bool :=
 
 Definition external_function_eq: forall (ef1 ef2: external_function), {ef1=ef2} + {ef1<>ef2}.
 Proof.
-  generalize ident_eq string_dec signature_eq chunk_eq typ_eq list_eq_dec zeq Int.eq_dec; intros.
+  generalize ident_eq string_dec signature_eq chunk_eq typ_eq list_eq_dec zeq Int.eq_dec chkc_exception_eq; intros.
   decide equality.
 Defined.
 Global Opaque external_function_eq.
