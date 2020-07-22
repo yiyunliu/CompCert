@@ -66,7 +66,9 @@ Inductive event: Type :=
   | Event_syscall: string -> list eventval -> eventval -> event
   | Event_vload: memory_chunk -> ident -> ptrofs -> eventval -> event
   | Event_vstore: memory_chunk -> ident -> ptrofs -> eventval -> event
-  | Event_annot: string -> list eventval -> event.
+  | Event_annot: string -> list eventval -> event
+  | Event_chkc_exception: chkc_exception -> event.
+
 
 (** The dynamic semantics for programs collect traces of events.
   Traces are of two kinds: finite (type [trace]) or infinite (type [traceinf]). *)
@@ -514,7 +516,10 @@ Inductive match_traces: trace -> trace -> Prop :=
   | match_traces_vstore: forall chunk id ofs arg,
       match_traces (Event_vstore chunk id ofs arg :: nil) (Event_vstore chunk id ofs arg :: nil)
   | match_traces_annot: forall id args,
-      match_traces (Event_annot id args :: nil) (Event_annot id args :: nil).
+      match_traces (Event_annot id args :: nil) (Event_annot id args :: nil)
+  (* YL: Not sure if I completely understand this. *)
+  | match_traces_chkc_exception: forall exception,
+      match_traces (Event_chkc_exception exception :: nil) (Event_chkc_exception exception :: nil).
 
 End MATCH_TRACES.
 
@@ -544,6 +549,7 @@ Definition output_event (ev: event) : Prop :=
   | Event_vload _ _ _ _ => False
   | Event_vstore _ _ _ _ => True
   | Event_annot _ _ => True
+  | Event_chkc_exception _ => True
   end.
 
 Fixpoint output_trace (t: trace) : Prop :=
@@ -1504,6 +1510,47 @@ Proof.
   apply known_builtin_ok.
 - apply external_functions_properties.
 Qed.
+Print extcall_sem.
+(** ** Semantics of checked-c exceptions. *)
+Inductive extcall_chkc_exception_sem (exception: chkc_exception) (ge: Senv.t):
+              list val -> mem -> trace -> val -> mem -> Prop :=
+  | extcall_chkc_exception_sem_intro: forall vargs m,
+      extcall_chkc_exception_sem exception ge vargs m (Event_chkc_exception exception :: E0) Vundef m.
+
+Lemma extcall_chkc_exception_ok:
+  forall exception targs,
+  extcall_properties (extcall_chkc_exception_sem exception)
+                     (mksignature targs Tvoid cc_default).
+Proof.
+  intros; constructor; intros.
+(* well typed *)
+- inv H. simpl. auto.
+(* symbols *)
+- inv H0. econstructor; eauto.
+(* valid blocks *)
+- inv H; auto.
+(* perms *)
+- inv H; auto.
+(* readonly *)
+- inv H; auto.
+(* mem extends *)
+- inv H.
+  exists Vundef; exists m1'; intuition.
+  econstructor; eauto.
+(* mem injects *)
+- inv H0.
+  exists f; exists Vundef; exists m1'; intuition.
+  econstructor; eauto.
+  red; intros; congruence.
+(* trace length *)
+- inv H; simpl; omega.
+(* receptive *)
+- inv H; inv H0; exists Vundef, m1; constructor.
+(* determ *)
+- inv H; inv H0.
+  split; constructor; intuition.
+Qed.
+
 
 (** Combining the semantics given above for the various kinds of external calls,
   we define the predicate [external_call] that relates:
@@ -1530,6 +1577,7 @@ Definition external_call (ef: external_function): extcall_sem :=
   | EF_annot_val kind txt targ => extcall_annot_val_sem txt targ
   | EF_inline_asm txt sg clb => inline_assembly_sem txt sg
   | EF_debug kind txt targs => extcall_debug_sem
+  | EF_chkc exception => extcall_chkc_exception_sem exception
   end.
 
 Theorem external_call_spec:
@@ -1549,6 +1597,7 @@ Proof.
   apply extcall_annot_val_ok.
   apply inline_assembly_properties.
   apply extcall_debug_ok.
+  apply extcall_chkc_exception_ok.
 Qed.
 
 Definition external_call_well_typed_gen ef := ec_well_typed (external_call_spec ef).
