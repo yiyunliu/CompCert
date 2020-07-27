@@ -20,8 +20,8 @@ Require Import Floats.
 Require Import Values.
 Require Import Memory.
 Require Import AST.
-Require Import Ctypes.
 Require Import ChkCtypes.
+Require Import Ctypes.
 Require Import Cop.
 Require Import ChkCsyntax.
 Require Import Csyntax.
@@ -84,7 +84,9 @@ Admitted.
 
 Fixpoint transl_typelist (e: ChkCtypes.typelist) : Ctypes.typelist.
 Admitted.
-
+Check Vnullptr.
+(* YL: Make sure that nullptr comparison/coercion for checked pointers
+all work out. Maybe it's ok to just follow the type system for now. *)
 Fixpoint transl_expr (e: ChkCsyntax.expr) : mon expr :=
   match e with
   | ChkCsyntax.Eval v ty =>
@@ -103,8 +105,14 @@ Fixpoint transl_expr (e: ChkCsyntax.expr) : mon expr :=
   (*   ret (Ederef tr (transl_type ty)) *)
   | ChkCsyntax.Ederef r ty =>
     do tr <- transl_expr r;
-  (* TODO: if then else here *)
-    ret (Ederef tr (transl_type ty))
+    (* TODO: if then else here *)
+    ret (Econdition
+           (Ebinop Oeq (Eval Vnullptr (Ctypes.Tpointer (transl_type ty) Ctypes.noattr)) tr (Ctypes.Tint Ctypes.I32 Ctypes.Signed Ctypes.noattr))
+           (Ederef tr (transl_type ty))
+           (* need to fix the type here *)
+           (* still worth checking what fails if we do this *)
+           (Ebuiltin (EF_chkc CE_OOB) Ctypes.Tnil Csyntax.Enil Ctypes.Tvoid)
+           (transl_type ty))
   | ChkCsyntax.Eaddrof l ty =>
     do tl <- transl_expr l;
     ret (Eaddrof tl (transl_type ty))
@@ -236,34 +244,73 @@ with transl_lblstmt (ls: ChkCsyntax.labeled_statements) : mon labeled_statements
 
 Check Csyntax.mkfunction.
 
+
 Definition transl_function (f: ChkCsyntax.function) : res function :=
   match transl_stmt f.(ChkCsyntax.fn_body) (initial_generator tt) with
   | Err msg =>
       Error msg
   | Res tbody _ i =>
       OK (mkfunction
-              f.(ChkCsyntax.fn_return)
-              f.(ChkCsyntax.fn_callconv)
-              f.(ChkCsyntax.fn_params)
-              f.(ChkCsyntax.fn_vars)
+              (transl_type (f.(ChkCsyntax.fn_return)))
+              (f.(ChkCsyntax.fn_callconv))
+              (map (fun x => (fst x, transl_type (snd x))) f.(ChkCsyntax.fn_params))
+              (map (fun x => (fst x, transl_type (snd x))) (f.(ChkCsyntax.fn_vars)))
               tbody)
   end.
 
 Local Open Scope error_monad_scope.
 
-Definition transl_fundef (fd: ChkCsyntax.fundef) : res fundef :=
+Definition transl_fundef (fd: ChkCsyntax.fundef) : res Csyntax.fundef :=
   match fd with
-  | Internal f =>
-      do tf <- transl_function f; OK (Internal tf)
-  | External ef targs tres cc =>
-      OK (External ef targs tres cc)
+  | ChkCtypes.Internal f =>
+      do tf <- transl_function f; OK (Ctypes.Internal tf)
+  | ChkCtypes.External ef targs tres cc =>
+    OK (Ctypes.External ef (transl_typelist targs) (transl_type tres) cc)
+  end.
+Check AST.transform_partial_program.
+Check AST.transform_partial_program2.
+Check AST.transform_partial_program2 (fun _ => transl_fundef) (fun _ ty => OK (transl_type ty)).
+Check prog_types.
+
+Definition transl_struct_or_union (su: ChkCtypes.struct_or_union) : Ctypes.struct_or_union :=
+  match su with
+  | ChkCtypes.Struct => Struct
+  | ChkCtypes.Union => Union
   end.
 
-Definition transl_program (p: ChkCsyntax.program) : res program :=
-  do p1 <- AST.transform_partial_program transl_fundef p;
+Definition transl_members : ChkCtypes.members -> members :=
+  map (fun '(i, ty) => (i, transl_type ty)).
+
+
+Definition transl_attr (a: ChkCtypes.attr) : attr :=
+  {| attr_volatile := a.(ChkCtypes.attr_volatile);
+     attr_alignas := a.(ChkCtypes.attr_alignas) |}.
+
+Definition transl_composite_def (defs: ChkCtypes.composite_definition) : Ctypes.composite_definition :=
+  match defs with
+  | ChkCtypes.Composite id su m a => 
+    Composite id
+            (transl_struct_or_union su)
+            (transl_members m)
+            (transl_attr a)
+  end.
+
+
+Definition transl_composite_env (defs: ChkCtypes.composite_env) : Ctypes.composite_env.
+Admitted.
+
+Lemma transl_composite_env_eq
+      (prog_types: list ChkCtypes.composite_definition)
+      (prog_comp_env: ChkCtypes.composite_env)
+      (prog_comp_env_eq: ChkCtypes.build_composite_env prog_types = OK prog_comp_env)
+  : Ctypes.build_composite_env (map transl_composite_def prog_types) = OK (transl_composite_env prog_comp_env).
+Admitted.
+
+Definition transl_program (p: ChkCsyntax.program) : res Csyntax.program :=
+  do p1 <- AST.transform_partial_program2 (fun _ => transl_fundef) (fun _ ty => OK (transl_type ty)) p;
   OK {| prog_defs := AST.prog_defs p1;
         prog_public := AST.prog_public p1;
         prog_main := AST.prog_main p1;
-        prog_types := prog_types p;
-        prog_comp_env := prog_comp_env p;
-        prog_comp_env_eq := prog_comp_env_eq p |}.
+        prog_types := map transl_composite_def (ChkCtypes.prog_types p);
+        prog_comp_env := transl_composite_env (ChkCtypes.prog_comp_env p);
+        prog_comp_env_eq := transl_composite_env_eq (ChkCtypes.prog_types p) (ChkCtypes.prog_comp_env p) (ChkCtypes.prog_comp_env_eq p) |}.
