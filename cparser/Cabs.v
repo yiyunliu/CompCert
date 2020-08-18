@@ -44,6 +44,7 @@ Inductive typeSpecifier := (* Merge all specifiers into one type *)
   | Tsigned
   | Tunsigned
   | T_Bool
+  | T_ChkCptr : (list spec_elem * decl_type) -> typeSpecifier
   | Tnamed : string -> typeSpecifier
   (* each of the following three kinds of specifiers contains a field
    * or list item iff it corresponds to a definition (as opposed to
