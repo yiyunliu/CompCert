@@ -74,6 +74,7 @@ let () =
       ("inline", fun loc -> INLINE loc);
       ("_Noreturn", fun loc -> NORETURN loc);
       ("int", fun loc -> INT loc);
+      ("ptr", fun loc -> CHKC_PTR loc);
       ("long", fun loc -> LONG loc);
       ("register", fun loc -> REGISTER loc);
       ("restrict", fun loc -> RESTRICT loc);
@@ -543,6 +544,7 @@ and singleline_comment = parse
       | Pre_parser.INC loc -> loop (Parser.INC loc)
       | Pre_parser.INLINE loc -> loop (Parser.INLINE loc)
       | Pre_parser.INT loc -> loop (Parser.INT loc)
+      | Pre_parser.CHKC_PTR loc -> loop (Parser.CHKC_PTR loc)
       | Pre_parser.LBRACE loc -> loop (Parser.LBRACE loc)
       | Pre_parser.LBRACK loc -> loop (Parser.LBRACK loc)
       | Pre_parser.LEFT loc -> loop (Parser.LEFT loc)

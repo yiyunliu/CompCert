@@ -780,6 +780,8 @@ let rec elab_specifier ?(only = false) loc env specifier =
         (!sto, !inline, !noreturn, !typedef, ty, env')
 
     (* Specifier doesn't make sense *)
+    | [Cabs.T_ChkCptr typ] ->
+        simple (TInt (IInt,[]))
     | _ ->
         fatal_error loc "illegal combination of type specifiers"
 
