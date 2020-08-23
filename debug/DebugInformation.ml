@@ -162,7 +162,10 @@ let insert_type ty =
                  enum_file_loc = None;
                  enum_enumerators = [];
                } in
-              EnumType enum in
+              EnumType enum
+          | TChkCptr (t,_) ->
+              let id = attr_aux t in
+              ChkCPointerType ({pts = id}) in
         insert d_ty ty
   and attr_aux ty =
     try

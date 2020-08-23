@@ -280,6 +280,8 @@ module Dwarfgenaux (Target: TARGET) =
       | ConstType c -> const_to_entry id c
       | VolatileType v -> volatile_to_entry id v
       | Void -> void_to_entry id
+      (* YL: TODO *)
+      | ChkCPointerType p -> pointer_to_entry id p
 
     let needs_types id d =
       let add_type id d =
@@ -314,6 +316,8 @@ module Dwarfgenaux (Target: TARGET) =
           List.fold_left (fun (d,c) f ->
             let d,c' = add_type f.cfd_typ d in
             d,c||c') (d,false) c.ct_members
+      | ChkCPointerType p ->
+          add_type p.pts d
 
     let gen_types needed =
       let rec aux d =

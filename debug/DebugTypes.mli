@@ -105,6 +105,7 @@ type debug_types =
   | ConstType of const_type
   | VolatileType of volatile_type
   | Void
+  | ChkCPointerType of ptr_type
 
 (* Types for global definitions *)
 

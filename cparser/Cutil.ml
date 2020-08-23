@@ -165,7 +165,7 @@ a)
   | TStruct(s, a) -> TStruct(s, add_attributes attr a)
   | TUnion(s, a) -> TUnion(s, add_attributes attr a)
   | TEnum(s, a) -> TEnum(s, add_attributes attr a)
-
+  | TChkCptr(ty, a) -> TChkCptr(ty, add_attributes attr a)
 (* Unrolling of typedef *)
 
 let rec unroll env t =
@@ -204,7 +204,7 @@ let rec attributes_of_type env t =
       | ei -> add_attributes ei.ei_attr a
       | exception Env.Error(Env.Unbound_tag _) -> a
       end
-
+  | TChkCptr(ty, a) -> a
 (* Extracting the attributes of a type, excluding the attributes
    attached to typedefs, structs and unions.  In other words,
    typedefs are not unrolled and composite definitions are not expanded. *)
@@ -221,7 +221,7 @@ let rec attributes_of_type_no_expand t =
   | TStruct(s, a) -> a
   | TUnion(s, a) -> a
   | TEnum(s, a) -> a
-
+  | TChkCptr(ty, a) -> a
 (* Changing the attributes of a type (at top-level) *)
 (* Same hack as above for array types. *)
 
@@ -241,6 +241,7 @@ let rec change_attributes_type env (f: attributes -> attributes) t =
   | TStruct(s, a) -> TStruct(s, f a)
   | TUnion(s, a) -> TUnion(s, f a)
   | TEnum(s, a) -> TEnum(s, f a)
+  | TChkCptr(ty, a) -> TChkCptr(ty, f a)
 
 let remove_attributes_type env attr t =
   change_attributes_type env (fun a -> remove_attributes a attr) t
@@ -262,6 +263,7 @@ let strip_attributes_type t attr =
   | TStruct (n,at) -> TStruct(n,strip at)
   | TUnion (n,at) -> TUnion(n,strip at)
   | TEnum (n,at) -> TEnum(n,strip at)
+  | TChkCptr (t,at) -> TChkCptr(t,strip at)
 
 (* Remove the last attribute from the toplevel and return the changed type *)
 let strip_last_attribute typ  =
@@ -289,6 +291,8 @@ let strip_last_attribute typ  =
     l,TUnion(n,r)
   | TEnum (n,at) -> let l,r = hd_opt at in
     l,TEnum(n,r)
+  | TChkCptr (t,at) -> let l,r = hd_opt at in
+    l,TChkCptr(t,r)
 
 (* Check whether the attributes contain _Alignas attribute *)
 let has_std_alignas env typ  =
@@ -510,6 +514,7 @@ let rec alignof env t =
   | TUnion(name, _) ->
     let ci = Env.find_union env name in ci.ci_alignof
   | TEnum(_, _) -> Some(alignof_ikind enum_ikind)
+  | TChkCptr(_, _) -> Some(!config.alignof_ptr)                     
 
 (* Compute the natural alignment of a struct or union.
    Not done here but in composite_info_decl: taking into account
@@ -580,6 +585,7 @@ let rec sizeof env t =
   | TUnion(name, _) ->
       let ci = Env.find_union env name in ci.ci_sizeof
   | TEnum(_, _) -> Some(sizeof_ikind enum_ikind)
+  | TChkCptr(_, _) -> Some(!config.sizeof_ptr)
 
 (* Compute the size of a union.
    It is the size is the max of the sizes of fields.
