@@ -180,6 +180,13 @@ let rec dcl ?(pp_indication=true) pp ty n =
       fprintf pp "union %a%a%t" ident id attributes a n
   | TEnum(id, a) ->
       fprintf pp "enum %a%a%t" ident id attributes a n
+  | TChkCptr(t, a) ->
+      let n' pp =
+        match t with
+        | TFun _ | TArray _ -> fprintf pp " (%aptr<%t>)" attributes a n
+        | _ -> fprintf pp " *%a%t" attributes a n in
+      dcl pp t n'
+
 
 let typ pp ty =
   dcl pp ty (fun _ -> ())

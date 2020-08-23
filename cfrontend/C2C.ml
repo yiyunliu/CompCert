@@ -616,6 +616,8 @@ let rec convertTyp env t =
       Tunion(intern_string id.name, convertAttr a)
   | C.TEnum(id, a) ->
       convertIkind Cutil.enum_ikind (convertAttr a)
+  (* YL: TODO *)
+  | _ -> raise Exit
 
 and convertParams env = function
     | [] -> Tnil
