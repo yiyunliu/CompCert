@@ -28,8 +28,8 @@ Require Import Memory.
 Require Import Events.
 Require Import Globalenvs.
 Require Import Smallstep.
-Require Import Ctypes.
-Require Import Cop.
+Require Import ChkCtypes.
+Require Import ChkCop.
 Require Import ChkCsyntax.
 Require Import ChkCsem.
 

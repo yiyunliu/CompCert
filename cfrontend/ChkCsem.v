@@ -12,12 +12,12 @@
 (*  under the terms of the INRIA Non-Commercial License Agreement.     *)
 (*                                                                     *)
 (* *********************************************************************)
-
+(* YL: TODO. Semantics for dereferencing checked pointer aren't defined *)
 (** Dynamic semantics for the Compcert C language *)
 
 Require Import Coqlib Errors Maps.
 Require Import Integers Floats Values AST Memory Builtins Events Globalenvs.
-Require Import Ctypes Cop ChkCsyntax.
+Require Import ChkCtypes ChkCop ChkCsyntax.
 Require Import Smallstep.
 
 (** * Operational semantics *)
@@ -445,7 +445,7 @@ Proof.
   set (t := typ_of_type ty).
   set (sg := mksignature (AST.Tint :: t :: t :: nil) (Tret t) cc_default).
   assert (LK: lookup_builtin_function "__builtin_sel"%string sg = Some (BI_standard (BI_select t))).
-  { unfold sg, t; destruct ty as   [ | ? ? ? | ? | [] ? | ? ? | ? ? ? | ? ? ? | ? ? | ? ? ];
+  { unfold sg, t; destruct ty as   [ | ? ? ? | ? | [] ? | ? ? | ? ? ? | ? ? ? | ? ? | ? ? | ? ? ];
     simpl; unfold Tptr; destruct Archi.ptr64; reflexivity. }
   set (v' := if b then v2' else v3').
   assert (C: val_casted v' ty).

@@ -11,7 +11,7 @@
 (* *********************************************************************)
 
 (** Translation from Checked C to Compcert C.
-    Side effects are pulled out of Compcert C expressions. *)
+    Dynamic checks are inserted at this stage and maybe optimized away in later stages. *)
 
 Require Import Coqlib.
 Require Import Errors.
@@ -23,6 +23,7 @@ Require Import AST.
 Require Import Ctypes.
 Require Import ChkCtypes.
 Require Import Cop.
+Require Import ChkCop.
 Require Import ChkCsyntax.
 Require Import Csyntax.
 
@@ -79,10 +80,19 @@ Parameter first_unused_ident: unit -> ident.
 Definition initial_generator (x: unit) : generator :=
   mkgenerator (first_unused_ident x) nil.
 
-Fixpoint transl_type (e: ChkCtypes.type) : Ctypes.type.
+Definition transl_type (e: ChkCtypes.type) : Ctypes.type.
 Admitted.
 
-Fixpoint transl_typelist (e: ChkCtypes.typelist) : Ctypes.typelist.
+Definition transl_typelist (e: ChkCtypes.typelist) : Ctypes.typelist.
+Admitted.
+
+Definition transl_unary_operation (e: ChkCop.unary_operation) : Cop.unary_operation.
+Admitted.
+
+Definition transl_binary_operation (e: ChkCop.binary_operation) : Cop.binary_operation.
+Admitted.
+
+Definition transl_incr_or_decr (e: ChkCop.incr_or_decr) : Cop.incr_or_decr.
 Admitted.
 
 Fixpoint transl_expr (e: ChkCsyntax.expr) : mon expr :=
@@ -110,11 +120,11 @@ Fixpoint transl_expr (e: ChkCsyntax.expr) : mon expr :=
     ret (Eaddrof tl (transl_type ty))
   | ChkCsyntax.Eunop op r ty =>
     do tr <- transl_expr r;
-    ret (Eunop op tr (transl_type ty))
+    ret (Eunop (transl_unary_operation op) tr (transl_type ty))
   | ChkCsyntax.Ebinop op r1 r2 ty =>
     do tr1 <- transl_expr r1;
     do tr2 <- transl_expr r2;
-    ret (Ebinop op tr1 tr2 (transl_type ty))
+    ret (Ebinop (transl_binary_operation op) tr1 tr2 (transl_type ty))
   | ChkCsyntax.Ecast r ty =>
     do tr <- transl_expr r;
     ret (Ecast tr (transl_type ty))
@@ -142,10 +152,10 @@ Fixpoint transl_expr (e: ChkCsyntax.expr) : mon expr :=
   | ChkCsyntax.Eassignop op l r tyres ty =>
     do tl <- transl_expr l;
     do tr <- transl_expr r;
-    ret (Eassignop op tl tr (transl_type tyres) (transl_type ty))
+    ret (Eassignop (transl_binary_operation op) tl tr (transl_type tyres) (transl_type ty))
   | ChkCsyntax.Epostincr id l ty =>
     do tl <- transl_expr l;
-    ret (Epostincr id tl (transl_type ty))
+    ret (Epostincr (transl_incr_or_decr id) tl (transl_type ty))
   | ChkCsyntax.Ecomma r1 r2 ty =>
     do tr1 <- transl_expr r1;
     do tr2 <- transl_expr r2;
@@ -236,30 +246,30 @@ with transl_lblstmt (ls: ChkCsyntax.labeled_statements) : mon labeled_statements
 
 Check Csyntax.mkfunction.
 
-Definition transl_function (f: ChkCsyntax.function) : res function :=
+Definition transl_function (f: ChkCsyntax.function) : res Csyntax.function :=
   match transl_stmt f.(ChkCsyntax.fn_body) (initial_generator tt) with
   | Err msg =>
       Error msg
   | Res tbody _ i =>
       OK (mkfunction
-              f.(ChkCsyntax.fn_return)
+              (transl_type f.(ChkCsyntax.fn_return))
               f.(ChkCsyntax.fn_callconv)
-              f.(ChkCsyntax.fn_params)
-              f.(ChkCsyntax.fn_vars)
+              (map (fun '(id, ty) => (id, transl_type ty)) f.(ChkCsyntax.fn_params))
+              (map (fun '(id, ty) => (id, transl_type ty)) f.(ChkCsyntax.fn_vars))
               tbody)
   end.
 
 Local Open Scope error_monad_scope.
 
-Definition transl_fundef (fd: ChkCsyntax.fundef) : res fundef :=
+Definition transl_fundef (fd: ChkCsyntax.fundef) : res Csyntax.fundef :=
   match fd with
   | Internal f =>
-      do tf <- transl_function f; OK (Internal tf)
+      do tf <- transl_function f; OK (Ctypes.Internal tf)
   | External ef targs tres cc =>
-      OK (External ef targs tres cc)
+      OK (Ctypes.External ef (transl_typelist targs) (transl_type tres) cc)
   end.
 
-Definition transl_program (p: ChkCsyntax.program) : res program :=
+Definition transl_program (p: ChkCsyntax.program) : res Csyntax.program :=
   do p1 <- AST.transform_partial_program transl_fundef p;
   OK {| prog_defs := AST.prog_defs p1;
         prog_public := AST.prog_public p1;

@@ -17,7 +17,7 @@
 
 Require Import Coqlib Maps Integers Floats Errors.
 Require Import AST Linking Values.
-Require Import ChkCtypes Cop.
+Require Import ChkCtypes ChkCop.
 
 (** ** Expressions *)
 
