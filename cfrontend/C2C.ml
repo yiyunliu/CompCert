@@ -18,8 +18,8 @@ open C
 open Camlcoq
 open! Floats
 open Values
-open Ctypes
-open Csyntax
+open ChkCtypes
+open ChkCsyntax
 
 (** ** Extracting information about global variables from their atom *)
 

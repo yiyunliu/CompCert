@@ -62,6 +62,7 @@ let name_of_external = function
   | EF_inline_asm(text, sg, clob) -> sprintf "inline_asm %S" (camlstring_of_coqstring text)
   | EF_debug(kind, text, targs) ->
       sprintf "debug%d %S" (P.to_int kind) (extern_atom text)
+  | EF_chkc _ -> sprintf "chkc_exception"
 
 let rec print_builtin_arg px oc = function
   | BA x -> px oc x

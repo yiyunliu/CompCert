@@ -158,15 +158,16 @@ Set Extraction AccessOpaque.
 Cd "extraction".
 
 Separate Extraction
-   Compiler.transf_c_program Compiler.transf_cminor_program
+   Compiler.transf_chkc_program Compiler.transf_c_program Compiler.transf_cminor_program
    Cexec.do_initial_state Cexec.do_step Cexec.at_final_state
-   Ctypes.merge_attributes Ctypes.remove_attributes Ctypes.build_composite_env
+   ChkCtypes.merge_attributes ChkCtypes.remove_attributes ChkCtypes.build_composite_env
+   ChkCtypes.merge_attributes ChkCtypes.remove_attributes ChkCtypes.build_composite_env
    Initializers.transl_init Initializers.constval
-   Csyntax.Eindex Csyntax.Epreincr Csyntax.Eselection
+   ChkCsyntax.Eindex ChkCsyntax.Epreincr ChkCsyntax.Eselection
    Ctyping.typecheck_program
    Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
    Ctyping.eselection
-   Ctypes.make_program
+   ChkCtypes.make_program
    Clight.type_of_function
    Conventions1.callee_save_type Conventions1.is_float_reg
    Conventions1.int_caller_save_regs Conventions1.float_caller_save_regs

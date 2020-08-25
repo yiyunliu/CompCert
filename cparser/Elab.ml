@@ -779,8 +779,9 @@ let rec elab_specifier ?(only = false) loc env specifier =
         restrict_check ty;
         (!sto, !inline, !noreturn, !typedef, ty, env')
 
-    | [Cabs.T_ChkCptr typ] ->
-        simple (TInt (IInt,[]))
+    | [Cabs.T_ChkCptr (spec,dcl)] ->
+        let (ty',env') = elab_type loc env spec dcl in
+        (!sto, !inline, !noreturn, !typedef, ty', env')
     (* Specifier doesn't make sense *)
     | _ ->
         fatal_error loc "illegal combination of type specifiers"
@@ -1210,7 +1211,7 @@ and elab_enum only loc tag optmembers attrs env =
 
 (* Elaboration of a naked type, e.g. in a cast *)
 
-let elab_type loc env spec decl =
+and elab_type loc env spec decl =
   let (sto, inl, noret, tydef, bty, env') = elab_specifier loc env spec in
   let ((ty, _), env'') = elab_type_declarator loc env' bty decl in
   (* NB: it seems the parser doesn't accept any of the specifiers below.

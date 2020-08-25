@@ -20,8 +20,8 @@ Require Import Floats.
 Require Import Values.
 Require Import Memory.
 Require Import AST.
-Require Import Ctypes.
 Require Import ChkCtypes.
+Require Import Ctypes.
 Require Import Cop.
 Require Import ChkCop.
 Require Import ChkCsyntax.
@@ -263,17 +263,52 @@ Local Open Scope error_monad_scope.
 
 Definition transl_fundef (fd: ChkCsyntax.fundef) : res Csyntax.fundef :=
   match fd with
-  | Internal f =>
+  | ChkCtypes.Internal f =>
       do tf <- transl_function f; OK (Ctypes.Internal tf)
-  | External ef targs tres cc =>
+  | ChkCtypes.External ef targs tres cc =>
       OK (Ctypes.External ef (transl_typelist targs) (transl_type tres) cc)
   end.
 
+Definition transl_struct_or_union (su: ChkCtypes.struct_or_union) : Ctypes.struct_or_union :=
+  match su with
+  | ChkCtypes.Struct => Ctypes.Struct
+  | ChkCtypes.Union => Ctypes.Union
+  end.
+
+Definition transl_members : ChkCtypes.members -> members :=
+  map (fun '(i, ty) => (i, transl_type ty)).
+
+
+Definition transl_attr (a: ChkCtypes.attr) : attr :=
+  {| attr_volatile := a.(ChkCtypes.attr_volatile);
+     attr_alignas := a.(ChkCtypes.attr_alignas) |}.
+
+Definition transl_composite_def (defs: ChkCtypes.composite_definition) : Ctypes.composite_definition :=
+  match defs with
+  | ChkCtypes.Composite id su m a => 
+    Composite id
+            (transl_struct_or_union su)
+            (transl_members m)
+            (transl_attr a)
+  end.
+
+
+Definition transl_composite_env (defs: ChkCtypes.composite_env) : Ctypes.composite_env.
+Admitted.
+
+Lemma transl_composite_env_eq
+      (prog_types: list ChkCtypes.composite_definition)
+      (prog_comp_env: ChkCtypes.composite_env)
+      (prog_comp_env_eq: ChkCtypes.build_composite_env prog_types = OK prog_comp_env)
+  : Ctypes.build_composite_env (map transl_composite_def prog_types) = OK (transl_composite_env prog_comp_env).
+Admitted.
+
+
 Definition transl_program (p: ChkCsyntax.program) : res Csyntax.program :=
-  do p1 <- AST.transform_partial_program transl_fundef p;
+  do p1 <- AST.transform_partial_program2 (fun _ => transl_fundef) (fun _ ty => OK (transl_type ty)) p;
   OK {| prog_defs := AST.prog_defs p1;
         prog_public := AST.prog_public p1;
         prog_main := AST.prog_main p1;
-        prog_types := prog_types p;
-        prog_comp_env := prog_comp_env p;
-        prog_comp_env_eq := prog_comp_env_eq p |}.
+        prog_types := map transl_composite_def (ChkCtypes.prog_types p);
+        prog_comp_env := transl_composite_env (ChkCtypes.prog_comp_env p);
+        prog_comp_env_eq := transl_composite_env_eq (ChkCtypes.prog_types p) (ChkCtypes.prog_comp_env p) (ChkCtypes.prog_comp_env_eq p) |}.

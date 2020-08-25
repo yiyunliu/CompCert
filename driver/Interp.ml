@@ -73,6 +73,8 @@ let print_event p = function
       fprintf p "annotation \"%s\" %a"
                 (camlstring_of_coqstring text)
                 print_eventval_list args
+  | Event_chkc_exception _ ->
+      fprintf p "checked c exception"
 
 (* Printing states *)
 
