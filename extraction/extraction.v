@@ -28,9 +28,11 @@ Require Tailcall.
 Require Allocation.
 Require Bounds.
 Require Ctypes.
+Require ChkCtypes.
 Require Csyntax.
 Require Ctyping.
 Require Clight.
+Require ChkCtyping.
 Require Compiler.
 Require Parser.
 Require Initializers.
@@ -164,10 +166,12 @@ Separate Extraction
    ChkCtypes.merge_attributes ChkCtypes.remove_attributes ChkCtypes.build_composite_env
    Initializers.transl_init Initializers.constval
    ChkCsyntax.Eindex ChkCsyntax.Epreincr ChkCsyntax.Eselection
-   Ctyping.typecheck_program
-   Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
-   Ctyping.eselection
+   ChkCtyping.typecheck_program
+   ChkCtyping.epostincr ChkCtyping.epostdecr ChkCtyping.epreincr ChkCtyping.epredecr
+   ChkCtyping.eselection
    ChkCtypes.make_program
+   ChkCtypes.typlist_of_typelist
+   ChkCtypes.signature_of_type
    Clight.type_of_function
    Conventions1.callee_save_type Conventions1.is_float_reg
    Conventions1.int_caller_save_regs Conventions1.float_caller_save_regs

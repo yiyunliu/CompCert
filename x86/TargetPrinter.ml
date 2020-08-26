@@ -809,6 +809,8 @@ module Target(System: SYSTEM):TARGET =
 	  fprintf oc "	subl	$%ld, %a\n" (camlint_of_coqint n) ireg32 res;
       | Psubq_ri (res,n) ->
 	  fprintf oc "	subq	%a, %a\n" intconst64 n ireg64 res;
+      | Pud2 ->
+          fprintf oc "  ud2\n"
       (* Pseudo-instructions *)
       | Plabel(l) ->
           fprintf oc "%a:\n" label (transl_label l)

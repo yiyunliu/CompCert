@@ -289,7 +289,9 @@ Inductive instruction: Type :=
   | Psbbl_rr (rd: ireg) (r2: ireg)
   | Psqrtsd (rd: freg) (r1: freg)
   | Psubl_ri (rd: ireg) (n: int)
-  | Psubq_ri (rd: ireg) (n: int64).
+  | Psubq_ri (rd: ireg) (n: int64)
+  (** Invalid Instruction *)
+  | Pud2                                                              (**r undefined instruction  *).
 
 Definition code := list instruction.
 Record function : Type := mkfunction { fn_sig: signature; fn_code: code }.
@@ -971,6 +973,7 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
       Stuck                             (**r treated specially below *)
   (** The following instructions and directives are not generated
       directly by [Asmgen], so we do not model them. *)
+  (* YL: TODO should we put UD here as well? *)
   | Padcl_ri _ _
   | Padcl_rr _ _
   | Paddl_mi _ _
@@ -1008,7 +1011,8 @@ Definition exec_instr (f: function) (i: instruction) (rs: regset) (m: mem) : out
   | Psbbl_rr _ _
   | Psqrtsd _ _
   | Psubl_ri _ _
-  | Psubq_ri _ _ => Stuck
+  | Psubq_ri _ _
+  | Pud2 => Stuck
   end.
 
 (** Translation of the LTL/Linear/Mach view of machine registers

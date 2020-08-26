@@ -14,7 +14,7 @@
 
 Require Import Coqlib Maps.
 Require Import Errors Integers Floats Values AST Memory Globalenvs Events Smallstep.
-Require Import Ctypes Cop Csyntax Csem.
+Require Import ChkCtypes ChkCop ChkCsyntax ChkCsem.
 Require Import Initializers.
 
 Open Scope error_monad_scope.

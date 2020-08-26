@@ -157,6 +157,9 @@ let expand_builtin_memcpy sz al args =
   then expand_builtin_memcpy_small sz al src dst
   else expand_builtin_memcpy_big sz al src dst
 
+let expand_chkc_exception =
+  emit
+
 (* Handling of volatile reads and writes *)
 
 let expand_builtin_vload_common chunk addr res =
@@ -554,6 +557,7 @@ let expand_instruction instr =
           expand_annot_val kind txt targ args res
        | EF_annot _ | EF_debug _ | EF_inline_asm _ ->
           emit instr
+       | EF_chkc _ -> emit Pud2
        | _ ->
           assert false
      end
