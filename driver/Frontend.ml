@@ -90,7 +90,7 @@ let parse_c_file sourcename ifile =
   (* Conversion to Csyntax *)
   let csyntax = Timing.time "CompCert C generation" C2C.convertProgram ast in
   (* Save CompCert C AST if requested *)
-  PrintCsyntax.print_if csyntax;
+  PrintChkCsyntax.print_if csyntax;
   csyntax
 
 let init () =

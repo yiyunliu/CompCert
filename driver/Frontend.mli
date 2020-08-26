@@ -14,7 +14,7 @@
 val preprocess: string -> string -> unit
   (** From C to preprocessed C *)
 
-val parse_c_file: string -> string -> Csyntax.coq_function Ctypes.program
+val parse_c_file: string -> string -> ChkCsyntax.coq_function ChkCtypes.program
   (** From preprocessed C to Csyntax *)
 
 val prepro_actions: (Commandline.pattern * Commandline.action) list

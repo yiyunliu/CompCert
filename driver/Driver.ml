@@ -57,7 +57,7 @@ let compile_c_file sourcename ifile ofile =
   (* Convert to Asm *)
   let asm =
     match Compiler.apply_partial
-               (Compiler.transf_c_program csyntax)
+               (Compiler.transf_chkc_program csyntax)
                Asmexpand.expand_program with
     | Errors.OK asm ->
         asm
@@ -76,8 +76,9 @@ let compile_c_file sourcename ifile ofile =
 let compile_i_file sourcename preproname =
   if !option_interp then begin
     Machine.config := Machine.compcert_interpreter !Machine.config;
-    let csyntax = parse_c_file sourcename preproname in
-    Interp.execute csyntax;
+    (* TODO: YL temporarily disable interpretation *)
+    (* let csyntax = parse_c_file sourcename preproname in *)
+    (* Interp.execute csyntax; *)
         ""
   end else if !option_S then begin
     compile_c_file sourcename preproname
