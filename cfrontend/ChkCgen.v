@@ -80,8 +80,14 @@ Parameter first_unused_ident: unit -> ident.
 Definition initial_generator (x: unit) : generator :=
   mkgenerator (first_unused_ident x) nil.
 
-Definition transl_type (e: ChkCtypes.type) : Ctypes.type.
-Admitted.
+Definition transl_type (t: ChkCtypes.type) : Ctypes.type :=
+  match t with
+  | ChkCtypes.Tvoid => Tvoid
+  | ChkCtypes.Tint sz sign a => Tint sz sign a
+  | ChkCtypes.Tlong sign a => Tlong sign a
+                                   
+  end.
+
 
 Definition transl_typelist (e: ChkCtypes.typelist) : Ctypes.typelist.
 Admitted.
