@@ -22,8 +22,8 @@ Require Import Memory.
 Require Import AST.
 Require Import ChkCtypes.
 Require Import Ctypes.
-Require Import Cop.
 Require Import ChkCop.
+Require Import Cop.
 Require Import ChkCsyntax.
 Require Import Csyntax.
 
@@ -80,26 +80,133 @@ Parameter first_unused_ident: unit -> ident.
 Definition initial_generator (x: unit) : generator :=
   mkgenerator (first_unused_ident x) nil.
 
-Definition transl_type (t: ChkCtypes.type) : Ctypes.type :=
+
+(* we can either pull the signedness etc. out to a separate module  *)
+(* or do brute force translation like this: *)
+
+
+Definition transl_signedness (t: ChkCtypes.signedness) : signedness :=
   match t with
-  | ChkCtypes.Tvoid => Tvoid
-  | ChkCtypes.Tint sz sign a => Tint sz sign a
-  | ChkCtypes.Tlong sign a => Tlong sign a
-                                   
+  | ChkCtypes.Signed  =>
+      Signed 
+  | ChkCtypes.Unsigned  =>
+      Unsigned 
+  end.
+
+Definition transl_intsize (t: ChkCtypes.intsize) : intsize :=
+  match t with
+  | ChkCtypes.I8  =>
+      I8 
+  | ChkCtypes.I16  =>
+      I16 
+  | ChkCtypes.I32  =>
+      I32 
+  | ChkCtypes.IBool  =>
+      IBool 
+  end.
+
+Definition transl_floatsize (t: ChkCtypes.floatsize) : floatsize :=
+  match t with
+  | ChkCtypes.F32  =>
+      F32 
+  | ChkCtypes.F64  =>
+      F64 
+  end.
+
+(* Record attr : Type := mk_attr { *)
+(*   attr_volatile: bool; *)
+(*   attr_alignas: option N         (**r log2 of required alignment *) *)
+(* }. *)
+
+Definition transl_attr (t: ChkCtypes.attr) : attr :=
+  {| attr_volatile := ChkCtypes.attr_volatile t;
+     attr_alignas := ChkCtypes.attr_alignas t |}.
+
+
+Fixpoint transl_type (t: ChkCtypes.type) : type :=
+  match t with
+  | ChkCtypes.Tvoid  =>
+      Tvoid 
+  | ChkCtypes.Tint a b c =>
+      Tint (transl_intsize a) (transl_signedness b) (transl_attr c)
+  | ChkCtypes.Tlong a b =>
+      Tlong (transl_signedness a) (transl_attr b)
+  | ChkCtypes.Tfloat a b =>
+      Tfloat (transl_floatsize a) (transl_attr b)
+  | ChkCtypes.Tpointer a b =>
+      Tpointer (transl_type a) (transl_attr b)
+  | ChkCtypes.Tarray a b c =>
+      Tarray (transl_type a) b (transl_attr c)
+  | ChkCtypes.Tfunction a b c =>
+      Tfunction (transl_typelist a) (transl_type b) c
+  | ChkCtypes.Tstruct a b =>
+      Tstruct a (transl_attr b)
+  | ChkCtypes.Tunion a b =>
+      Tunion a (transl_attr b)
+  | ChkCtypes.Tchkcptr a b =>
+      Tpointer (transl_type a) (transl_attr b)
+  end
+with transl_typelist (ts: ChkCtypes.typelist) : Ctypes.typelist :=
+       match ts with
+       | ChkCtypes.Tnil => Tnil
+       | ChkCtypes.Tcons t ts' => Tcons (transl_type t) (transl_typelist ts')
+       end.
+
+Definition transl_unary_operation (t: ChkCop.unary_operation) : unary_operation :=
+  match t with
+  | ChkCop.Onotbool  =>
+      Onotbool 
+  | ChkCop.Onotint  =>
+      Onotint 
+  | ChkCop.Oneg  =>
+      Oneg 
+  | ChkCop.Oabsfloat  =>
+      Oabsfloat 
+  end.
+
+Definition transl_binary_operation (t: ChkCop.binary_operation) : binary_operation :=
+  match t with
+  | ChkCop.Oadd  =>
+      Oadd 
+  | ChkCop.Osub  =>
+      Osub 
+  | ChkCop.Omul  =>
+      Omul 
+  | ChkCop.Odiv  =>
+      Odiv 
+  | ChkCop.Omod  =>
+      Omod 
+  | ChkCop.Oand  =>
+      Oand 
+  | ChkCop.Oor  =>
+      Oor 
+  | ChkCop.Oxor  =>
+      Oxor 
+  | ChkCop.Oshl  =>
+      Oshl 
+  | ChkCop.Oshr  =>
+      Oshr 
+  | ChkCop.Oeq  =>
+      Oeq 
+  | ChkCop.One  =>
+      One 
+  | ChkCop.Olt  =>
+      Olt 
+  | ChkCop.Ogt  =>
+      Ogt 
+  | ChkCop.Ole  =>
+      Ole 
+  | ChkCop.Oge  =>
+      Oge 
   end.
 
 
-Definition transl_typelist (e: ChkCtypes.typelist) : Ctypes.typelist.
-Admitted.
+Definition transl_incr_or_decr (e: ChkCop.incr_or_decr) : incr_or_decr :=
+  match e with
+  | ChkCop.Incr => Incr
+  | ChkCop.Decr => Decr
+  end.
 
-Definition transl_unary_operation (e: ChkCop.unary_operation) : Cop.unary_operation.
-Admitted.
-
-Definition transl_binary_operation (e: ChkCop.binary_operation) : Cop.binary_operation.
-Admitted.
-
-Definition transl_incr_or_decr (e: ChkCop.incr_or_decr) : Cop.incr_or_decr.
-Admitted.
 
 Fixpoint transl_expr (e: ChkCsyntax.expr) : mon expr :=
   match e with
@@ -284,11 +391,6 @@ Definition transl_struct_or_union (su: ChkCtypes.struct_or_union) : Ctypes.struc
 Definition transl_members : ChkCtypes.members -> members :=
   map (fun '(i, ty) => (i, transl_type ty)).
 
-
-Definition transl_attr (a: ChkCtypes.attr) : attr :=
-  {| attr_volatile := a.(ChkCtypes.attr_volatile);
-     attr_alignas := a.(ChkCtypes.attr_alignas) |}.
-
 Definition transl_composite_def (defs: ChkCtypes.composite_definition) : Ctypes.composite_definition :=
   match defs with
   | ChkCtypes.Composite id su m a => 
@@ -297,7 +399,6 @@ Definition transl_composite_def (defs: ChkCtypes.composite_definition) : Ctypes.
             (transl_members m)
             (transl_attr a)
   end.
-
 
 Definition transl_composite_env (defs: ChkCtypes.composite_env) : Ctypes.composite_env.
 Admitted.
