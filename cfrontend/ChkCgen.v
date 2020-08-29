@@ -13,6 +13,7 @@
 (** Translation from Checked C to Compcert C.
     Dynamic checks are inserted at this stage and maybe optimized away in later stages. *)
 
+Require Import Maps.
 Require Import Coqlib.
 Require Import Errors.
 Require Import Integers.
@@ -388,8 +389,18 @@ Definition transl_struct_or_union (su: ChkCtypes.struct_or_union) : Ctypes.struc
   | ChkCtypes.Union => Ctypes.Union
   end.
 
+
 Definition transl_members : ChkCtypes.members -> members :=
   map (fun '(i, ty) => (i, transl_type ty)).
+
+Definition transl_composite (comp: ChkCtypes.composite) : Ctypes.composite.
+Proof with eauto.
+  destruct comp.
+  econstructor...
+  - apply transl_struct_or_union...
+  - apply transl_members...
+  - apply transl_attr...
+Defined.
 
 Definition transl_composite_def (defs: ChkCtypes.composite_definition) : Ctypes.composite_definition :=
   match defs with
@@ -401,7 +412,10 @@ Definition transl_composite_def (defs: ChkCtypes.composite_definition) : Ctypes.
   end.
 
 Definition transl_composite_env (defs: ChkCtypes.composite_env) : Ctypes.composite_env.
-Admitted.
+  eapply PTree.map1.
+  apply transl_composite.
+  intuition.
+Defined.
 
 Lemma transl_composite_env_eq
       (prog_types: list ChkCtypes.composite_definition)
