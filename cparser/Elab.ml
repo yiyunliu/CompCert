@@ -781,7 +781,7 @@ let rec elab_specifier ?(only = false) loc env specifier =
 
     | [Cabs.T_ChkCptr (spec,dcl)] ->
         let (ty',env') = elab_type loc env spec dcl in
-        (!sto, !inline, !noreturn, !typedef, ty', env')
+        (!sto, !inline, !noreturn, !typedef, TChkCptr (ty', !attr), env')
     (* Specifier doesn't make sense *)
     | _ ->
         fatal_error loc "illegal combination of type specifiers"
@@ -872,7 +872,6 @@ and elab_type_declarator ?(fundef = false) loc env ty = function
         if not fundef || d <> Cabs.JUSTBASE then
           fatal_error loc "illegal old-style K&R function definition";
         ((TFun(ty, None, false, a), Some params), env'')
-
 (* Elaboration of parameters in a prototype *)
 
 and elab_parameters loc env params =
@@ -1538,6 +1537,7 @@ let rec elab_list zi il first =
 
 and elab_item zi item il =
   let ty = I.typeof zi in
+  (* print_typ env Format.std_formatter ty; *)
   match item, unroll env ty with
   (* Special case char array = "string literal"
                or wchar array = L"wide string literal" *)
@@ -1582,7 +1582,7 @@ and elab_item zi item il =
 and elab_single zi a il =
   let ty = I.typeof zi in
   match unroll env ty with
-  | TInt _ | TEnum _ | TFloat _ | TPtr _ ->
+  | TInt _ | TEnum _ | TFloat _ | TPtr _ | TChkCptr _ ->
       (* This is a scalar: do direct initialization and continue *)
       check_init_type loc env a ty;
       elab_list (I.set zi (Init_single a)) il false
@@ -1759,7 +1759,7 @@ let elab_expr ctx loc env a =
       let b1,env = elab env a1 in
       let (fld, attrs) =
         match unroll env b1.etyp with
-        | TPtr(t, _) | TArray(t,_,_) ->
+        | TPtr(t, _) | TArray(t,_,_) | TChkCptr (t, _) ->
             begin match unroll env t with
             | TStruct(id, attrs) ->
                 (wrap Env.find_struct_member loc env (id, fieldname), attrs)

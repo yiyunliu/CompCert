@@ -93,6 +93,7 @@ Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
 
 (* SimplExpr *)
 Extract Constant SimplExpr.first_unused_ident => "Camlcoq.first_unused_ident".
+Extract Constant ChkCgen.first_unused_ident => "Camlcoq.first_unused_ident".
 Extraction Inline SimplExpr.ret SimplExpr.error SimplExpr.bind SimplExpr.bind2.
 
 (* Compopts *)

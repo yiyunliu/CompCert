@@ -87,6 +87,7 @@ let parse_c_file sourcename ifile =
   let ast = Parse.preprocessed_file simplifs sourcename ifile in
   (* Save C AST if requested *)
   Cprint.print_if ast;
+  
   (* Conversion to Csyntax *)
   let csyntax = Timing.time "CompCert C generation" C2C.convertProgram ast in
   (* Save CompCert C AST if requested *)

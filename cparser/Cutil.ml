@@ -1161,8 +1161,9 @@ let valid_cast env tfrom tto =
   | _, TVoid _ -> true
   (* from any int-or-pointer (with array and functions decaying to pointers)
      to any int-or-pointer *)
-  | (TInt _ | TPtr _ | TArray _ | TFun _ | TEnum _),
-    (TInt _ | TPtr _ | TEnum _) -> true
+  (* YL: TODO broken as well *)
+  | (TInt _ | TPtr _ | TArray _ | TFun _ | TEnum _ | TChkCptr _),
+    (TInt _ | TPtr _ | TEnum _ | TChkCptr _) -> true
   (* between int and float types *)
   | (TInt _ | TFloat _ | TEnum _), (TInt _ | TFloat _ | TEnum _) -> true
   | _, _ -> false
@@ -1172,6 +1173,9 @@ let valid_cast env tfrom tto =
 let int_pointer_conversion env tfrom tto =
   match unroll env tfrom, unroll env tto with
   | (TInt _ | TEnum _),(TPtr _)
+  | (TInt _ | TEnum _),(TChkCptr _)
+  (* YL: TODO. broken  *)
+  | (TChkCptr _),(TInt _ | TEnum _)
   | (TPtr _),(TInt _ | TEnum _) -> true
   | _,_ -> false
 
@@ -1283,6 +1287,8 @@ let rec default_init env ty =
       | [] -> raise No_default_init
       | fld :: _ -> Init_union(id, fld, default_init env fld.fld_typ)
       end
+  | TChkCptr(ty, _) ->
+      Init_single nullconst
   | _ ->
       raise No_default_init
 

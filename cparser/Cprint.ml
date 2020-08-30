@@ -183,8 +183,9 @@ let rec dcl ?(pp_indication=true) pp ty n =
   | TChkCptr(t, a) ->
       let n' pp =
         match t with
-        | TFun _ | TArray _ -> fprintf pp " (%aptr<%t>)" attributes a n
-        | _ -> fprintf pp " *%a%t" attributes a n in
+        (* | TFun _ | TArray _ -> fprintf pp " (%aptr<%t>)" attributes a n *)
+        (* | _ -> fprintf pp " ptr<%t>%a" attributes a n in *)
+        | _ -> fprintf pp " <*>%a%t" attributes a n in
       dcl pp t n'
 
 
