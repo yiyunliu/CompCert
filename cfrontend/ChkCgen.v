@@ -221,13 +221,13 @@ Fixpoint transl_expr (e: ChkCsyntax.expr) : mon expr :=
   | ChkCsyntax.Evalof l ty =>
     do tl <- transl_expr l;
     ret (Evalof tl (transl_type ty))
-  (* | ChkCsyntax.Ederef r (Tchkcptr _ _ as ty) => *)
-  (*   do tr <- transl_expr r; *)
-    
-  (*   ret (Ederef tr (transl_type ty)) *)
+  | ChkCsyntax.Ederef r (Tchkcptr _ _ as ty) =>
+    do tr <- transl_expr r;
+    ret (Ebuiltin (EF_chkc CE_NULLPTR) Tnil Enil (transl_type ty))
   | ChkCsyntax.Ederef r ty =>
     do tr <- transl_expr r;
   (* TODO: if then else here *)
+    (* ret (Ebuiltin (EF_chkc CE_NULLPTR) Tnil Enil (transl_type ty)) *)
     ret (Ederef tr (transl_type ty))
   | ChkCsyntax.Eaddrof l ty =>
     do tl <- transl_expr l;
@@ -262,6 +262,8 @@ Fixpoint transl_expr (e: ChkCsyntax.expr) : mon expr :=
   | ChkCsyntax.Eassign l r ty =>
     do tl <- transl_expr l;
     do tr <- transl_expr r;
+    (* YL: testing if invalid instruction works *)
+    (* ret (Ebuiltin (EF_chkc CE_NULLPTR) Tnil Enil Tvoid) *)
     ret (Eassign tl tr (transl_type ty))
   | ChkCsyntax.Eassignop op l r tyres ty =>
     do tl <- transl_expr l;

@@ -2051,7 +2051,7 @@ let elab_expr ctx loc env a =
       begin match unroll env b1.etyp with
       (* '*' applied to a function type has no effect *)
       | TFun _ -> b1,env
-      | TPtr(ty, _) | TArray(ty, _, _) ->
+      | TChkCptr(ty, _) | TPtr(ty, _) | TArray(ty, _, _) ->
           { edesc = EUnop(Oderef, b1); etyp = ty },env
       | _ ->
           fatal_error "argument of unary '*' is not a pointer (%a invalid)"
@@ -2333,8 +2333,8 @@ let elab_expr ctx loc env a =
             if incomp_ty1 <> incomp_ty2 then
               warning Unnamed "comparison of complete and incomplete pointers";
             EBinop(op, b1, b2, TPtr(ty1, []))
-        | TPtr _, (TInt _ | TEnum _)
-        | (TInt _ | TEnum _), TPtr _ ->
+        | (TPtr _ | TChkCptr _), (TInt _ | TEnum _)
+        | (TInt _ | TEnum _), (TPtr _ | TChkCptr _) ->
             warning Unnamed "comparison between pointer and integer (%a and %a)"
               (print_typ env) b1.etyp (print_typ env) b2.etyp;
             EBinop(op, b1, b2, TPtr(TVoid [], []))
