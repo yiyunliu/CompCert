@@ -208,26 +208,30 @@ Definition transl_incr_or_decr (e: ChkCop.incr_or_decr) : incr_or_decr :=
   | ChkCop.Decr => Decr
   end.
 
-
-Fixpoint transl_expr (e: ChkCsyntax.expr) : mon expr :=
+Fixpoint transl_expr (e: ChkCsyntax.expr) : mon (option statement * expr) :=
   match e with
   | ChkCsyntax.Eval v ty =>
-    ret (Eval v (transl_type ty))
+    ret (None, Eval v (transl_type ty))
   | ChkCsyntax.Evar x ty =>
-    ret (Evar x (transl_type ty))
+    ret (None, Evar x (transl_type ty))
   | ChkCsyntax.Efield l f ty =>
-    do tl <- transl_expr l;
-    ret (Efield tl f (transl_type ty))
+    do (chk, tl) <- transl_expr l;
+    ret (chk, Efield tl f (transl_type ty))
   | ChkCsyntax.Evalof l ty =>
-    do tl <- transl_expr l;
-    ret (Evalof tl (transl_type ty))
+    do (chk, tl) <- transl_expr l;
+    ret (chk, Evalof tl (transl_type ty))
   | ChkCsyntax.Ederef r (Tchkcptr _ _ as ty) =>
     do tr <- transl_expr r;
     ret (Ebuiltin (EF_chkc CE_NULLPTR) Tnil Enil (transl_type ty))
   | ChkCsyntax.Ederef r ty =>
-    do tr <- transl_expr r;
-  (* TODO: if then else here *)
-    (* ret (Ebuiltin (EF_chkc CE_NULLPTR) Tnil Enil (transl_type ty)) *)
+    do (chk, tr) <- transl_expr r;
+    (* TODO: if then else here *)
+    tmp <- gen_next;
+    
+    Sifthenelse (Ebinop Oeq tr ())
+    ret (Ebuiltin (EF_chkc CE_NULLPTR) Tnil Enil (transl_type ty))
+                use this type
+    (* (Tint I32 Signed noattr) *)
     ret (Ederef tr (transl_type ty))
   | ChkCsyntax.Eaddrof l ty =>
     do tl <- transl_expr l;
@@ -264,7 +268,7 @@ Fixpoint transl_expr (e: ChkCsyntax.expr) : mon expr :=
     do tr <- transl_expr r;
     (* YL: testing if invalid instruction works *)
     (* ret (Ebuiltin (EF_chkc CE_NULLPTR) Tnil Enil Tvoid) *)
-    ret (Eassign tl tr (transl_type ty))
+    ret (None, Eassign tl tr (transl_type ty))
   | ChkCsyntax.Eassignop op l r tyres ty =>
     do tl <- transl_expr l;
     do tr <- transl_expr r;
