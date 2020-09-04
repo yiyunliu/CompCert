@@ -37,7 +37,6 @@ Record generator : Type := mkgenerator {
   gen_next: ident;
   gen_trail: list (ident * type)
 }.
-
 Inductive result (A: Type) (g: generator) : Type :=
   | Err: Errors.errmsg -> result A g
   | Res: A -> forall (g': generator), Ple (gen_next g) (gen_next g') -> result A g.
@@ -80,6 +79,13 @@ Parameter first_unused_ident: unit -> ident.
 
 Definition initial_generator (x: unit) : generator :=
   mkgenerator (first_unused_ident x) nil.
+
+Definition gensym (ty: type): mon ident :=
+  fun (g: generator) =>
+    Res (gen_next g)
+        (mkgenerator (Pos.succ (gen_next g)) ((gen_next g, ty) :: gen_trail g))
+        (Ple_succ (gen_next g)).
+
 
 
 (* we can either pull the signedness etc. out to a separate module  *)
@@ -208,9 +214,43 @@ Definition transl_incr_or_decr (e: ChkCop.incr_or_decr) : incr_or_decr :=
   | ChkCop.Decr => Decr
   end.
 
+Definition option_bind {a b:Type} (e: option a) (f: a -> option b) : option b.
+Proof.
+  destruct e.
+  - apply f.
+    exact a0.
+  - exact None.
+Defined.
+
+Definition option_liftM2 {a b c: Type} (f: a -> b -> c)  (o1 : option a) (o2 : option b) : option c.
+Proof with eauto.
+  apply option_map in f...
+  eapply option_bind...
+  intros...
+  eapply option_map in f...
+Defined.
+
+Definition merge_check (s1 : option statement) (s2 : option statement) : option statement.
+Proof.
+  destruct s1 as [s1 | ], s2 as [s2|].
+  - apply Some.
+    exact (Ssequence s1 s2).
+  - exact (Some s1).
+  - exact (Some s2).
+  - exact None.
+Defined.
+
+Definition prepend_check (chk : option statement) (s : statement) : statement.
+Proof.
+  destruct chk as [chk|].
+  - exact (Ssequence chk s).
+  - exact s.
+Defined.
+
 Fixpoint transl_expr (e: ChkCsyntax.expr) : mon (option statement * expr) :=
   match e with
   | ChkCsyntax.Eval v ty =>
+
     ret (None, Eval v (transl_type ty))
   | ChkCsyntax.Evar x ty =>
     ret (None, Evar x (transl_type ty))
@@ -221,117 +261,122 @@ Fixpoint transl_expr (e: ChkCsyntax.expr) : mon (option statement * expr) :=
     do (chk, tl) <- transl_expr l;
     ret (chk, Evalof tl (transl_type ty))
   | ChkCsyntax.Ederef r (Tchkcptr _ _ as ty) =>
-    do tr <- transl_expr r;
-    ret (Ebuiltin (EF_chkc CE_NULLPTR) Tnil Enil (transl_type ty))
-  | ChkCsyntax.Ederef r ty =>
     do (chk, tr) <- transl_expr r;
     (* TODO: if then else here *)
-    tmp <- gen_next;
-    
-    Sifthenelse (Ebinop Oeq tr ())
-    ret (Ebuiltin (EF_chkc CE_NULLPTR) Tnil Enil (transl_type ty))
-                use this type
-    (* (Tint I32 Signed noattr) *)
-    ret (Ederef tr (transl_type ty))
+
+    let chk' := Sifthenelse
+                 (Eunop Onotbool tr (Tint I32 Signed noattr))
+                 (Sdo (Ebuiltin (EF_chkc CE_NULLPTR) Tnil Enil Tvoid))
+                 Sskip
+    in ret (option_map (fun x => Ssequence x chk') chk , (Ederef tr (transl_type ty)))
+                (* use this type *)
+  | ChkCsyntax.Ederef r ty =>
+    do (chk, tr) <- transl_expr r;
+    ret (chk, tr)
   | ChkCsyntax.Eaddrof l ty =>
-    do tl <- transl_expr l;
-    ret (Eaddrof tl (transl_type ty))
+    do (chk, tl) <- transl_expr l;
+    ret (chk, Eaddrof tl (transl_type ty))
   | ChkCsyntax.Eunop op r ty =>
-    do tr <- transl_expr r;
-    ret (Eunop (transl_unary_operation op) tr (transl_type ty))
+    do (chk, tr) <- transl_expr r;
+    ret (chk, Eunop (transl_unary_operation op) tr (transl_type ty))
   | ChkCsyntax.Ebinop op r1 r2 ty =>
-    do tr1 <- transl_expr r1;
-    do tr2 <- transl_expr r2;
-    ret (Ebinop (transl_binary_operation op) tr1 tr2 (transl_type ty))
+    do (chk1, tr1) <- transl_expr r1;
+    do (chk2, tr2) <- transl_expr r2;
+    (* YL: TODO this liftM2 stuff is totally wrong *)
+    ret (merge_check chk1 chk2,  (Ebinop (transl_binary_operation op) tr1 tr2 (transl_type ty)))
   | ChkCsyntax.Ecast r ty =>
-    do tr <- transl_expr r;
-    ret (Ecast tr (transl_type ty))
+    do (chk, tr) <- transl_expr r;
+    ret (chk, Ecast tr (transl_type ty))
   | ChkCsyntax.Eseqand r1 r2 ty =>
-    do tr1 <- transl_expr r1;
-    do tr2 <- transl_expr r2;
-    ret (Eseqand tr1 tr2 (transl_type ty))
+    do (chk1, tr1) <- transl_expr r1;
+    do (chk2, tr2) <- transl_expr r2;
+    (* todo: take care of short circuiting *)
+    ret (merge_check chk1 chk2, Eseqand tr1 tr2 (transl_type ty))
   | ChkCsyntax.Eseqor r1 r2 ty =>
-    do tr1 <- transl_expr r1;
-    do tr2 <- transl_expr r2;
-    ret (Eseqor tr1 tr2 (transl_type ty))
+    do (chk1, tr1) <- transl_expr r1;
+    do (chk2, tr2) <- transl_expr r2;
+    ret (merge_check chk1 chk2, Eseqor tr1 tr2 (transl_type ty))
   | ChkCsyntax.Econdition r1 r2 r3 ty =>
-    do tr1 <- transl_expr r1;
-    do tr2 <- transl_expr r2;
-    do tr3 <- transl_expr r3;
-    ret (Econdition tr1 tr2 tr3 (transl_type ty))
+    do (chk1, tr1) <- transl_expr r1;
+    do (chk2, tr2) <- transl_expr r2;
+    do (chk3, tr3) <- transl_expr r3;
+    (* does associativity matter? *)
+    ret (merge_check (merge_check chk1 chk2) chk3, Econdition tr1 tr2 tr3 (transl_type ty))
   | ChkCsyntax.Esizeof ty' ty =>
-    ret (Esizeof (transl_type ty') (transl_type ty))
+    ret (None, Esizeof (transl_type ty') (transl_type ty))
   | ChkCsyntax.Ealignof ty' ty =>
-    ret (Ealignof (transl_type ty') (transl_type ty))
+    ret (None, Ealignof (transl_type ty') (transl_type ty))
   | ChkCsyntax.Eassign l r ty =>
-    do tl <- transl_expr l;
-    do tr <- transl_expr r;
+    do (chkl, tl) <- transl_expr l;
+    do (chkr, tr) <- transl_expr r;
     (* YL: testing if invalid instruction works *)
     (* ret (Ebuiltin (EF_chkc CE_NULLPTR) Tnil Enil Tvoid) *)
-    ret (None, Eassign tl tr (transl_type ty))
+    ret (merge_check chkl chkr, Eassign tl tr (transl_type ty))
   | ChkCsyntax.Eassignop op l r tyres ty =>
-    do tl <- transl_expr l;
-    do tr <- transl_expr r;
-    ret (Eassignop (transl_binary_operation op) tl tr (transl_type tyres) (transl_type ty))
+    do (chkl, tl) <- transl_expr l;
+    do (chkr, tr) <- transl_expr r;
+    ret (merge_check chkl chkr, Eassignop (transl_binary_operation op) tl tr (transl_type tyres) (transl_type ty))
   | ChkCsyntax.Epostincr id l ty =>
-    do tl <- transl_expr l;
-    ret (Epostincr (transl_incr_or_decr id) tl (transl_type ty))
+    do (chk, tl) <- transl_expr l;
+    ret (chk, Epostincr (transl_incr_or_decr id) tl (transl_type ty))
   | ChkCsyntax.Ecomma r1 r2 ty =>
-    do tr1 <- transl_expr r1;
-    do tr2 <- transl_expr r2;
-    ret (Ecomma tr1 tr2 (transl_type ty))
+    do (chk1, tr1) <- transl_expr r1;
+    do (chk2, tr2) <- transl_expr r2;
+    ret (merge_check chk1 chk2, Ecomma tr1 tr2 (transl_type ty))
   | ChkCsyntax.Ecall r1 rargs ty =>
-    do tr1    <- transl_expr r1;
-    do trargs <- transl_exprlist rargs;
-    ret (Ecall tr1 trargs (transl_type ty))
+    do (chk1, tr1)    <- transl_expr r1;
+    do (chks, trargs) <- transl_exprlist rargs;
+    (* YL: skip this for now *)
+    ret (chk1, Ecall tr1 trargs (transl_type ty))
   | ChkCsyntax.Ebuiltin ef tyargs rargs ty =>
-    do trargs <- transl_exprlist rargs;
-    ret (Ebuiltin ef (transl_typelist tyargs) trargs (transl_type ty))
+    do (chk, trargs) <- transl_exprlist rargs;
+    ret (None, Ebuiltin ef (transl_typelist tyargs) trargs (transl_type ty))
   | ChkCsyntax.Eloc b ofs ty =>
-    ret (Eloc b ofs (transl_type ty))
+    ret (None, (Eloc b ofs (transl_type ty)))
   | ChkCsyntax.Eparen r tycast ty =>
-    do tr <- transl_expr r;
-    ret (Eparen tr (transl_type tycast) (transl_type ty))
+    do (chk, tr) <- transl_expr r;
+    ret (chk, Eparen tr (transl_type tycast) (transl_type ty))
   end
 
-with transl_exprlist (rl : ChkCsyntax.exprlist) : mon exprlist :=
+with transl_exprlist (rl : ChkCsyntax.exprlist) : mon (list statement * exprlist) :=
        match rl with
-       | ChkCsyntax.Enil => ret Enil
+       (* YL: fix this *)
+       | ChkCsyntax.Enil => ret (nil, Enil)
        | ChkCsyntax.Econs r1 rl2 =>
-         do tr1  <- transl_expr r1;
-         do trl2 <- transl_exprlist rl2;
-         ret (Econs tr1 trl2)
+         do (_, tr1)  <- transl_expr r1;
+         do (_, trl2) <- transl_exprlist rl2;
+         ret (nil, Econs tr1 trl2)
        end.
 
 Fixpoint transl_stmt (s: ChkCsyntax.statement) : mon statement :=
   match s with
   | ChkCsyntax.Sskip => ret Sskip
   | ChkCsyntax.Sdo e =>
-      do te <- transl_expr e;
-      ret (Sdo te)
+      do (chk, te) <- transl_expr e;
+      ret (prepend_check chk (Sdo te))
   | ChkCsyntax.Ssequence s1 s2 =>
       do ts1 <- transl_stmt s1;
       do ts2 <- transl_stmt s2;
       ret (Ssequence ts1 ts2)
   | ChkCsyntax.Sifthenelse e s1 s2 =>
-      do te  <- transl_expr e;
+      do (chk, te)  <- transl_expr e;
       do ts1 <- transl_stmt s1;
       do ts2 <- transl_stmt s2;
-      ret (Sifthenelse te ts1 ts2)
+      ret (prepend_check chk (Sifthenelse te ts1 ts2))
   | ChkCsyntax.Swhile e s1 =>
-      do te  <- transl_expr e;
+      do (chk, te)  <- transl_expr e;
       do ts1 <- transl_stmt s1;
-      ret (Swhile te ts1)
+      ret (prepend_check chk (Swhile te ts1))
   | ChkCsyntax.Sdowhile e s1 =>
-      do te  <- transl_expr e;
+      do (chk, te)  <- transl_expr e;
       do ts1 <- transl_stmt s1;
-      ret (Sdowhile te ts1)
+      ret (prepend_check chk (Sdowhile te ts1))
   | ChkCsyntax.Sfor s1 e2 s3 s4 =>
       do ts1 <- transl_stmt s1;
-      do te2 <- transl_expr e2;
+      do (chk2, te2) <- transl_expr e2;
       do ts3 <- transl_stmt s3;
       do ts4 <- transl_stmt s4;
-      ret (Sfor ts1 te2 ts3 ts4)
+      ret (prepend_check chk2 (Sfor ts1 te2 ts3 ts4))
   | ChkCsyntax.Sbreak =>
       ret Sbreak
   | ChkCsyntax.Scontinue =>
@@ -339,12 +384,12 @@ Fixpoint transl_stmt (s: ChkCsyntax.statement) : mon statement :=
   | ChkCsyntax.Sreturn None =>
       ret (Sreturn None)
   | ChkCsyntax.Sreturn (Some e) =>
-      do te <- transl_expr e;
-      ret (Sreturn (Some te))
+      do (chk, te) <- transl_expr e;
+      ret (prepend_check chk (Sreturn (Some te)))
   | ChkCsyntax.Sswitch e ls =>
-      do te <- transl_expr e;
+      do (chk, te) <- transl_expr e;
       do tls <- transl_lblstmt ls;
-      ret (Sswitch te tls)
+      ret (prepend_check chk (Sswitch te tls))
   | ChkCsyntax.Slabel lbl s1 =>
       do ts1 <- transl_stmt s1;
       ret (Slabel lbl ts1)
