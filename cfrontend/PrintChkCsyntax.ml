@@ -131,8 +131,8 @@ let rec name_cdecl id ty =
   | Tchkcptr(t, a) ->
       let id' =
         match t with
-        | Tfunction _ | Tarray _ -> sprintf "(*%s%s)" (attributes_space a) id
-        | _                      -> sprintf "*%s%s" (attributes_space a) id in
+        | Tfunction _ | Tarray _ -> sprintf "(<*>%s%s)" (attributes_space a) id
+        | _                      -> sprintf "<*>%s%s" (attributes_space a) id in
       name_cdecl id' t
 
 (* Type *)

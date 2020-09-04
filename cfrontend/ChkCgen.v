@@ -250,7 +250,6 @@ Defined.
 Fixpoint transl_expr (e: ChkCsyntax.expr) : mon (option statement * expr) :=
   match e with
   | ChkCsyntax.Eval v ty =>
-
     ret (None, Eval v (transl_type ty))
   | ChkCsyntax.Evar x ty =>
     ret (None, Evar x (transl_type ty))
@@ -260,6 +259,7 @@ Fixpoint transl_expr (e: ChkCsyntax.expr) : mon (option statement * expr) :=
   | ChkCsyntax.Evalof l ty =>
     do (chk, tl) <- transl_expr l;
     ret (chk, Evalof tl (transl_type ty))
+  (* YL: never comes to this branch. type annotation incorrect? *)
   | ChkCsyntax.Ederef r (Tchkcptr _ _ as ty) =>
     do (chk, tr) <- transl_expr r;
     (* TODO: if then else here *)
@@ -268,11 +268,15 @@ Fixpoint transl_expr (e: ChkCsyntax.expr) : mon (option statement * expr) :=
                  (Eunop Onotbool tr (Tint I32 Signed noattr))
                  (Sdo (Ebuiltin (EF_chkc CE_NULLPTR) Tnil Enil Tvoid))
                  Sskip
-    in ret (option_map (fun x => Ssequence x chk') chk , (Ederef tr (transl_type ty)))
+    in ret (merge_check chk (Some chk') , (Ederef tr (transl_type ty)))
                 (* use this type *)
   | ChkCsyntax.Ederef r ty =>
     do (chk, tr) <- transl_expr r;
-    ret (chk, tr)
+    let chk' := Sifthenelse
+                 (Eunop Onotbool tr (Tint I32 Signed noattr))
+                 (Sdo (Ebuiltin (EF_chkc CE_NULLPTR) Tnil Enil Tvoid))
+                 Sskip
+    in ret (merge_check chk (Some chk'), Ederef tr (transl_type ty))
   | ChkCsyntax.Eaddrof l ty =>
     do (chk, tl) <- transl_expr l;
     ret (chk, Eaddrof tl (transl_type ty))
