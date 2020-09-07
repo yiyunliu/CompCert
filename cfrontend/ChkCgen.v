@@ -264,16 +264,24 @@ Fixpoint transl_expr (e: ChkCsyntax.expr) : mon (option statement * expr) :=
     do (chk, tr) <- transl_expr r;
     (* TODO: if then else here *)
 
-    let chk' :=
-        match ChkCsyntax.typeof r with
-        | ChkCtypes.Tchkcptr _ _ =>
-          Some (Sifthenelse
-                 (Eunop Onotbool tr (Tint I32 Signed noattr))
-                 (Sdo (Ebuiltin (EF_chkc CE_NULLPTR) Tnil Enil Tvoid))
-                 Sskip)
-        | _ => None
-        end
-    in ret (merge_check chk chk' , (Ederef tr (transl_type ty)))
+    (* let chk' := *)
+    match ChkCsyntax.typeof r with
+    | ChkCtypes.Tchkcptr _ _ as chkt => 
+      let pt := transl_type chkt in
+      do  x <- gensym pt;
+      let t := Evar x pt in
+      let chk' :=  Ssequence
+                    (Sdo (Eassign t tr pt))
+                    (Sifthenelse
+                       (Eunop Onotbool t (Tint I32 Signed noattr))
+                       (Sdo (Ebuiltin (EF_chkc CE_NULLPTR) Tnil Enil Tvoid))
+                       Sskip) in
+      ret (merge_check chk (Some chk'), Ederef t (transl_type ty))
+    | _ => ret (chk, (Ederef tr (transl_type ty)))
+    end
+    (* in do *)
+    (*   chk'' <- chk'; *)
+    (*   ret (merge_check chk chk'' , (Ederef tr (transl_type ty))) *)
                 (* use this type *)
   (* | ChkCsyntax.Ederef r ty => *)
   (*   do (chk, tr) <- transl_expr r; *)
@@ -418,18 +426,16 @@ with transl_lblstmt (ls: ChkCsyntax.labeled_statements) : mon labeled_statements
 
 (** Translation of a function *)
 
-Check Csyntax.mkfunction.
-
 Definition transl_function (f: ChkCsyntax.function) : res Csyntax.function :=
   match transl_stmt f.(ChkCsyntax.fn_body) (initial_generator tt) with
   | Err msg =>
       Error msg
-  | Res tbody _ i =>
+  | Res tbody g i =>
       OK (mkfunction
               (transl_type f.(ChkCsyntax.fn_return))
               f.(ChkCsyntax.fn_callconv)
               (map (fun '(id, ty) => (id, transl_type ty)) f.(ChkCsyntax.fn_params))
-              (map (fun '(id, ty) => (id, transl_type ty)) f.(ChkCsyntax.fn_vars))
+              (gen_trail g ++  map (fun '(id, ty) => (id, transl_type ty)) f.(ChkCsyntax.fn_vars))
               tbody)
   end.
 
