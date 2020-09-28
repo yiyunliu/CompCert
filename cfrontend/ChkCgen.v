@@ -247,6 +247,12 @@ Proof.
   - exact s.
 Defined.
 
+Definition let_bind_expr (e: expr) : mon (option statement * expr) :=
+  (* potentially returning the same expression if it has no effects? *)
+  do v <- gensym (typeof e);
+  let e' := Evar v (typeof e) in
+  ret (Some (Sdo (Eassign e' e (typeof e))), e').
+
 Fixpoint transl_expr (e: ChkCsyntax.expr) : mon (option statement * expr) :=
   match e with
   | ChkCsyntax.Eval v ty =>
@@ -306,13 +312,16 @@ Fixpoint transl_expr (e: ChkCsyntax.expr) : mon (option statement * expr) :=
     ret (chk, Ecast tr (transl_type ty))
   | ChkCsyntax.Eseqand r1 r2 ty =>
     do (chk1, tr1) <- transl_expr r1;
+    do (chk1', tr1') <- let_bind_expr tr1;
     do (chk2, tr2) <- transl_expr r2;
     (* todo: take care of short circuiting *)
-    ret (merge_check chk1 chk2, Eseqand tr1 tr2 (transl_type ty))
+    ret (merge_check (merge_check chk1 chk1') chk2, Eseqand tr1' tr2 (transl_type ty))
   | ChkCsyntax.Eseqor r1 r2 ty =>
     do (chk1, tr1) <- transl_expr r1;
+    do (chk1', tr1') <- let_bind_expr tr1;
     do (chk2, tr2) <- transl_expr r2;
-    ret (merge_check chk1 chk2, Eseqor tr1 tr2 (transl_type ty))
+    (* todo: take care of short circuiting *)
+    ret (merge_check (merge_check chk1 chk1') chk2, Eseqor tr1' tr2 (transl_type ty))
   | ChkCsyntax.Econdition r1 r2 r3 ty =>
     do (chk1, tr1) <- transl_expr r1;
     do (chk2, tr2) <- transl_expr r2;
